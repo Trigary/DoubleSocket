@@ -1,0 +1,31 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 15
+VisualStudioVersion = 15.0.27428.2005
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DoubleSocket", "DoubleSocket\DoubleSocket.csproj", "{CEDE4DD0-5BAD-4665-92A4-961FBF16EA93}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DoubleSocket.Test", "DoubleSocket.Test\DoubleSocket.Test.csproj", "{FA26F0F8-0CC7-43B8-A8EC-0A168A8DA851}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{CEDE4DD0-5BAD-4665-92A4-961FBF16EA93}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{CEDE4DD0-5BAD-4665-92A4-961FBF16EA93}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{CEDE4DD0-5BAD-4665-92A4-961FBF16EA93}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{CEDE4DD0-5BAD-4665-92A4-961FBF16EA93}.Release|Any CPU.Build.0 = Release|Any CPU
+		{FA26F0F8-0CC7-43B8-A8EC-0A168A8DA851}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{FA26F0F8-0CC7-43B8-A8EC-0A168A8DA851}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{FA26F0F8-0CC7-43B8-A8EC-0A168A8DA851}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{FA26F0F8-0CC7-43B8-A8EC-0A168A8DA851}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {4FB0F9C5-16C1-406A-ACFF-933BEC2A89EC}
+	EndGlobalSection
+EndGlobal

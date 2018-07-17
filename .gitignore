@@ -1,0 +1,9 @@
+# Solution's Visual Studio files
+/.vs/
+/packages/
+/TestResults/
+
+# Projects' Visual Studio files
+/DoubleSocket*/bin/
+/DoubleSocket*/obj/
+/DoubleSocket*/*.csproj.user
