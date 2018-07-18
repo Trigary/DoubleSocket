@@ -26,7 +26,7 @@ namespace DoubleSocket.Test {
 			int runCounter = 0;
 
 			UdpServerSocket server = null;
-			server = new UdpServerSocket((sender, buffer, size) => server.Send(sender, buffer, size),
+			server = new UdpServerSocket((sender, buffer, size) => server.Send(sender, buffer, 0, size),
 				DataLength, Port, SocketBufferSize, Timeout);
 
 			byte[] sendBuffer = new byte[DataLength];
@@ -40,12 +40,13 @@ namespace DoubleSocket.Test {
 						Monitor.Pulse(monitor);
 					} else {
 						_random.NextBytes(sendBuffer);
-						client.Send(sendBuffer, sendBuffer.Length);
+						client.Send(sendBuffer, 0, sendBuffer.Length);
 					}
 				}
-			}, DataLength, Ip, Port, SocketBufferSize, Timeout);
+			}, SocketBufferSize, Timeout);
+			client.Start(Ip, Port, DataLength);
 
-			client.Send(sendBuffer, sendBuffer.Length);
+			client.Send(sendBuffer, 0, sendBuffer.Length);
 			lock (monitor) {
 				Monitor.Wait(monitor);
 			}
@@ -59,18 +60,18 @@ namespace DoubleSocket.Test {
 
 			TcpServerSocket server = null;
 			server = new TcpServerSocket(socket => { }, (sender, buffer, size) =>
-				server.Send(sender, buffer, size), DataLength, 10, Port, SocketBufferSize, Timeout);
+				server.Send(sender, buffer, 0, size), DataLength, 10, Port, SocketBufferSize, Timeout);
 
 			byte[] sendBuffer = new byte[DataLength];
 			_random.NextBytes(sendBuffer);
 
 			TcpClientSocket client = null;
-			client = new TcpClientSocket(instance => {
+			client = new TcpClientSocket(() => {
 				lock (monitor) {
 					if (!clientMaySend) {
 						Monitor.Wait(monitor);
 					}
-					instance.Send(sendBuffer, sendBuffer.Length);
+					client.Send(sendBuffer, 0, sendBuffer.Length);
 				}
 			}, (buffer, size) => {
 				lock (monitor) {
@@ -79,10 +80,11 @@ namespace DoubleSocket.Test {
 						Monitor.Pulse(monitor);
 					} else {
 						_random.NextBytes(sendBuffer);
-						client.Send(sendBuffer, sendBuffer.Length);
+						client.Send(sendBuffer, 0, sendBuffer.Length);
 					}
 				}
-			}, DataLength, Ip, Port, SocketBufferSize, Timeout);
+			}, SocketBufferSize, Timeout);
+			client.Start(Ip, Port, DataLength);
 
 			lock (monitor) {
 				clientMaySend = true;

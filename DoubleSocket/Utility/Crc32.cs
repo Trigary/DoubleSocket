@@ -1,4 +1,7 @@
 ﻿namespace DoubleSocket.Utility {
+	/// <summary>
+	/// A utility class used to calcuate CRC-32 values.
+	/// </summary>
 	public static class Crc32 { //Source: https://github.com/force-net/Crc32.NET
 		private static readonly uint[] Table = new uint[16 * 256];
 
@@ -17,10 +20,17 @@
 
 
 
-		public static uint Get(byte[] input, int offset, int length) {
+		/// <summary>
+		/// Calculates the CRC-32 value of the specified bytes.
+		/// </summary>
+		/// <param name="input">The bytes of which the CRC-32 value to calculate.</param>
+		/// <param name="offset">The offset of the bytes.</param>
+		/// <param name="count">The count of the bytes to be involved in the calculation.</param>
+		/// <returns>The calculated CRC-32 value.</returns>
+		public static uint Get(byte[] input, int offset, int count) {
 			uint crcLocal = uint.MaxValue;
 
-			while (length >= 16) {
+			while (count >= 16) {
 				uint a = Table[(3 * 256) + input[offset + 12]]
 					^ Table[(2 * 256) + input[offset + 13]]
 					^ Table[(1 * 256) + input[offset + 14]]
@@ -43,10 +53,10 @@
 
 				crcLocal = d ^ c ^ b ^ a;
 				offset += 16;
-				length -= 16;
+				count -= 16;
 			}
 
-			while (--length >= 0) {
+			while (--count >= 0) {
 				crcLocal = Table[(byte)(crcLocal ^ input[offset++])] ^ crcLocal >> 8;
 			}
 

@@ -22,8 +22,8 @@ namespace DoubleSocket.Test {
 
 				for (int i = 0; i < DataPerKeyCount; i++) {
 					random.NextBytes(original);
-					byte[] encrypted = crypto.Encrypt(original, original.Length);
-					byte[] decrypted = crypto.Decrypt(encrypted, encrypted.Length);
+					byte[] encrypted = crypto.Encrypt(original, 0, original.Length);
+					byte[] decrypted = crypto.Decrypt(encrypted, 0, encrypted.Length);
 					CollectionAssert.AreEqual(original, decrypted);
 				}
 			}
@@ -41,8 +41,8 @@ namespace DoubleSocket.Test {
 
 				for (int i = 0; i < DataPerKeyCount; i++) {
 					random.NextBytes(original);
-					byte[] encrypted = crypto.Encrypt(key, original, original.Length);
-					byte[] decrypted = crypto.Decrypt(key, encrypted, encrypted.Length);
+					byte[] encrypted = crypto.Encrypt(key, original, 0, original.Length);
+					byte[] decrypted = crypto.Decrypt(key, encrypted, 0, encrypted.Length);
 					CollectionAssert.AreEqual(original, decrypted);
 				}
 			}

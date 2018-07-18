@@ -3,97 +3,161 @@ using System.Net;
 using System.Net.Sockets;
 
 namespace DoubleSocket.Server {
-	public class TcpServerSocket { //TODO length-prefix and packet reassembly in this class
-		public delegate void NewSocketHandler(Socket socket);
+	/// <summary>
+	/// A TCP server which is able to accept new connections and send, receive bytes.
+	/// Does not manipulate the sent, received bytes. This class is safe to use from multiple threads.
+	/// </summary>
+	public class TcpServerSocket {
+		/// <summary>
+		/// Fired when a new connection is created.
+		/// </summary>
+		/// <param name="socket">The newly created socket.</param>
+		public delegate void NewConnectionHandler(Socket socket);
+
+		/// <summary>
+		/// Fired when data is received.
+		/// </summary>
+		/// <param name="sender">The sender of the data.</param>
+		/// <param name="buffer">The buffer containing the data.</param>
+		/// <param name="size">The length of the data in the buffer.</param>
 		public delegate void ReceiveHandler(Socket sender, byte[] buffer, int size);
 
+		/// <summary>
+		/// Whether the server is currently accepting new connections. True by default.
+		/// </summary>
 		public bool Accepting { get; private set; }
+
 		private readonly HashSet<Socket> _sockets = new HashSet<Socket>();
-		private readonly NewSocketHandler _newSocketHandler;
+		private readonly NewConnectionHandler _newConnectionHandler;
 		private readonly ReceiveHandler _receiveHandler;
 		private readonly int _receiveBufferArraySize;
 		private readonly Socket _socket;
 		private bool _stoppedAccepting = true;
 
-		public TcpServerSocket(NewSocketHandler newSocketHandler, ReceiveHandler receiveHandler, int receiveBufferArraySize,
+		/// <summary>
+		/// Creates a new instance with the specified options and instantly starts it.
+		/// </summary>
+		/// <param name="newConnectionHandler">The handler of new connections.</param>
+		/// <param name="receiveHandler">The handler of received data.</param>
+		/// <param name="receiveBufferArraySize">The size of the buffer used in the ReceiveHandler.</param>
+		/// <param name="maxPendingConnections">The maximum count of pending connections (backlog).</param>
+		/// <param name="port">The port the server should listen on.</param>
+		/// <param name="socketBufferSize">The size of the socket's internal send and receive buffers.</param>
+		/// <param name="timeout">The timeout in millis for the socket's functions.</param>
+		public TcpServerSocket(NewConnectionHandler newConnectionHandler, ReceiveHandler receiveHandler, int receiveBufferArraySize,
 								int maxPendingConnections, int port, int socketBufferSize, int timeout) {
-			_newSocketHandler = newSocketHandler;
-			_receiveHandler = receiveHandler;
-			_receiveBufferArraySize = receiveBufferArraySize;
+			lock (this) {
+				_newConnectionHandler = newConnectionHandler;
+				_receiveHandler = receiveHandler;
+				_receiveBufferArraySize = receiveBufferArraySize;
 
-			_socket = new Socket(SocketType.Stream, ProtocolType.Tcp) {
-				ReceiveBufferSize = socketBufferSize,
-				SendBufferSize = socketBufferSize,
-				ReceiveTimeout = timeout,
-				SendTimeout = timeout,
-				NoDelay = true
-			};
+				_socket = new Socket(SocketType.Stream, ProtocolType.Tcp) {
+					ReceiveBufferSize = socketBufferSize,
+					SendBufferSize = socketBufferSize,
+					ReceiveTimeout = timeout,
+					SendTimeout = timeout,
+					NoDelay = true
+				};
 
-			_socket.Bind(new IPEndPoint(IPAddress.Any, port));
-			_socket.Listen(maxPendingConnections);
-			StartAccepting();
-		}
-
-
-
-		public void Close() {
-			_socket.Shutdown(SocketShutdown.Both);
-			_socket.Close();
-			foreach (Socket socket in _sockets) {
-				socket.Close();
+				_socket.Bind(new IPEndPoint(IPAddress.Any, port));
+				_socket.Listen(maxPendingConnections);
+				StartAccepting();
 			}
 		}
 
-		public void Disconnect(Socket socket) {
-			_sockets.Remove(socket);
-			socket.Close();
-		}
-
-		public void Send(Socket recipient, byte[] data, int size) {
-			recipient.Send(data, size, SocketFlags.None);
-		}
 
 
-
-		public void StartAccepting() {
-			Accepting = true;
-			if (_stoppedAccepting) {
-				_stoppedAccepting = false;
-				SocketAsyncEventArgs eventArgs = new SocketAsyncEventArgs();
-				eventArgs.Completed += OnAccepted;
-				if (!_socket.AcceptAsync(eventArgs)) {
-					OnAccepted(null, eventArgs);
+		/// <summary>
+		/// Stops the server from accepting new connections and closes all previously created connections.
+		/// </summary>
+		public void Close() {
+			lock (this) {
+				Accepting = false;
+				_socket.Shutdown(SocketShutdown.Both);
+				_socket.Close();
+				foreach (Socket socket in _sockets) {
+					socket.Close();
 				}
 			}
 		}
 
+		/// <summary>
+		/// Kicks the speicifed socket from the server.
+		/// </summary>
+		/// <param name="socket">The socket to kick.</param>
+		public void Disconnect(Socket socket) {
+			lock (this) {
+				_sockets.Remove(socket);
+				socket.Close();
+			}
+		}
+
+		/// <summary>
+		/// Sends the specified connection the specified data.
+		/// </summary>
+		/// <param name="recipient">The recipient for the data.</param>
+		/// <param name="data">The data to send.</param>
+		/// <param name="offset">The offset of the data in the buffer.</param>
+		/// <param name="size">The size of the data.</param>
+		public void Send(Socket recipient, byte[] data, int offset, int size) { //TODO this should be async
+			lock (this) {
+				recipient.Send(data, offset, size, SocketFlags.None);
+			}
+		}
+
+
+
+		/// <summary>
+		/// Start accepting new connections again.
+		/// </summary>
+		public void StartAccepting() {
+			lock (this) {
+				Accepting = true;
+				if (_stoppedAccepting) {
+					_stoppedAccepting = false;
+					SocketAsyncEventArgs eventArgs = new SocketAsyncEventArgs();
+					eventArgs.Completed += OnAccepted;
+					if (!_socket.AcceptAsync(eventArgs)) {
+						OnAccepted(null, eventArgs);
+					}
+				}
+			}
+		}
+
+		/// <summary>
+		/// Stop accepting new connections.
+		/// </summary>
 		public void StopAccepting() {
-			Accepting = false;
+			lock (this) {
+				Accepting = false;
+			}
 		}
 
 
 
 		private void OnAccepted(object sender, SocketAsyncEventArgs eventArgs) {
-			while (true) {
-				if (eventArgs.SocketError != SocketError.Success) {
-					throw new SocketException((int)eventArgs.SocketError);
-				}
+			lock (this) {
+				while (true) {
+					if (eventArgs.SocketError != SocketError.Success) {
+						throw new SocketException((int)eventArgs.SocketError);
+					}
 
-				Socket newSocket = eventArgs.AcceptSocket;
-				eventArgs.AcceptSocket = null;
+					Socket newSocket = eventArgs.AcceptSocket;
+					eventArgs.AcceptSocket = null;
 
-				if (!Accepting) {
-					// ReSharper disable once PossibleNullReferenceException
-					newSocket.Close();
-					_stoppedAccepting = true;
-					return;
-				}
+					if (!Accepting) {
+						// ReSharper disable once PossibleNullReferenceException
+						newSocket.Close();
+						_stoppedAccepting = true;
+						return;
+					}
 
-				_sockets.Add(newSocket);
-				_newSocketHandler(newSocket);
-				StartReceiving(newSocket);
-				if (_socket.AcceptAsync(eventArgs)) {
-					break;
+					_sockets.Add(newSocket);
+					_newConnectionHandler(newSocket);
+					StartReceiving(newSocket);
+					if (_socket.AcceptAsync(eventArgs)) {
+						break;
+					}
 				}
 			}
 		}
@@ -109,18 +173,20 @@ namespace DoubleSocket.Server {
 		}
 
 		private void OnReceived(object sender, SocketAsyncEventArgs eventArgs) {
-			while (true) {
-				if (eventArgs.SocketError != SocketError.Success) {
-					throw new SocketException((int)eventArgs.SocketError);
-				}
+			lock (this) {
+				while (true) {
+					if (eventArgs.SocketError != SocketError.Success) {
+						throw new SocketException((int)eventArgs.SocketError);
+					}
 
-				UserToken token = (UserToken)eventArgs.UserToken;
-				if (token.ShouldHandle()) {
-					_receiveHandler(token.Socket, eventArgs.Buffer, eventArgs.BytesTransferred);
-				}
+					UserToken token = (UserToken)eventArgs.UserToken;
+					if (token.ShouldHandle()) {
+						_receiveHandler(token.Socket, eventArgs.Buffer, eventArgs.BytesTransferred);
+					}
 
-				if (token.Socket.ReceiveAsync(eventArgs)) {
-					break;
+					if (token.Socket.ReceiveAsync(eventArgs)) {
+						break;
+					}
 				}
 			}
 		}

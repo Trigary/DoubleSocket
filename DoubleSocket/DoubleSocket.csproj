@@ -41,11 +41,14 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Client\IDoubleClientHandler.cs" />
     <Compile Include="Client\TcpClientSocket.cs" />
     <Compile Include="Client\UdpClientSocket.cs" />
     <Compile Include="Client\DoubleClient.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Protocol\DoubleProtocol.cs" />
+    <Compile Include="Protocol\TcpHelper.cs" />
+    <Compile Include="Protocol\UdpHelper.cs" />
     <Compile Include="Server\DoubleServer.cs" />
     <Compile Include="Server\TcpServerSocket.cs" />
     <Compile Include="Server\UdpServerSocket.cs" />
