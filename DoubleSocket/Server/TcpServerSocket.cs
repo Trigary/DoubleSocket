@@ -1,6 +1,7 @@
 ﻿using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
+using DoubleSocket.Protocol;
 
 namespace DoubleSocket.Server {
 	/// <summary>
@@ -23,11 +24,17 @@ namespace DoubleSocket.Server {
 		public delegate void ReceiveHandler(Socket sender, byte[] buffer, int size);
 
 		/// <summary>
+		/// The max count of cached SocketAsyncEventArgs instances.
+		/// </summary>
+		public const int MaxCachedSendEventArgs = 100;
+
+		/// <summary>
 		/// Whether the server is currently accepting new connections. True by default.
 		/// </summary>
 		public bool Accepting { get; private set; }
 
 		private readonly HashSet<Socket> _sockets = new HashSet<Socket>();
+		private readonly Queue<SocketAsyncEventArgs> _sendEventArgsQueue = new Queue<SocketAsyncEventArgs>();
 		private readonly NewConnectionHandler _newConnectionHandler;
 		private readonly ReceiveHandler _receiveHandler;
 		private readonly int _receiveBufferArraySize;
@@ -44,8 +51,8 @@ namespace DoubleSocket.Server {
 		/// <param name="port">The port the server should listen on.</param>
 		/// <param name="socketBufferSize">The size of the socket's internal send and receive buffers.</param>
 		/// <param name="timeout">The timeout in millis for the socket's functions.</param>
-		public TcpServerSocket(NewConnectionHandler newConnectionHandler, ReceiveHandler receiveHandler, int receiveBufferArraySize,
-								int maxPendingConnections, int port, int socketBufferSize, int timeout) {
+		public TcpServerSocket(NewConnectionHandler newConnectionHandler, ReceiveHandler receiveHandler, int maxPendingConnections,
+								int port, int socketBufferSize, int timeout, int receiveBufferArraySize) {
 			lock (this) {
 				_newConnectionHandler = newConnectionHandler;
 				_receiveHandler = receiveHandler;
@@ -73,10 +80,9 @@ namespace DoubleSocket.Server {
 		public void Close() {
 			lock (this) {
 				Accepting = false;
-				_socket.Shutdown(SocketShutdown.Both);
-				_socket.Close();
+				TcpHelper.DisconnectAsync(_socket, _sendEventArgsQueue, OnSent);
 				foreach (Socket socket in _sockets) {
-					socket.Close();
+					TcpHelper.DisconnectAsync(socket, _sendEventArgsQueue, OnSent);
 				}
 			}
 		}
@@ -88,7 +94,7 @@ namespace DoubleSocket.Server {
 		public void Disconnect(Socket socket) {
 			lock (this) {
 				_sockets.Remove(socket);
-				socket.Close();
+				TcpHelper.DisconnectAsync(socket, _sendEventArgsQueue, OnSent);
 			}
 		}
 
@@ -99,9 +105,20 @@ namespace DoubleSocket.Server {
 		/// <param name="data">The data to send.</param>
 		/// <param name="offset">The offset of the data in the buffer.</param>
 		/// <param name="size">The size of the data.</param>
-		public void Send(Socket recipient, byte[] data, int offset, int size) { //TODO this should be async
+		public void Send(Socket recipient, byte[] data, int offset, int size) {
 			lock (this) {
-				recipient.Send(data, offset, size, SocketFlags.None);
+				SocketAsyncEventArgs eventArgs;
+				if (_sendEventArgsQueue.Count == 0) {
+					eventArgs = new SocketAsyncEventArgs();
+					eventArgs.Completed += OnSent;
+				} else {
+					eventArgs = _sendEventArgsQueue.Dequeue();
+				}
+
+				eventArgs.SetBuffer(data, offset, size);
+				if (!recipient.SendAsync(eventArgs)) {
+					OnSent(null, eventArgs);
+				}
 			}
 		}
 
@@ -147,11 +164,12 @@ namespace DoubleSocket.Server {
 
 					if (!Accepting) {
 						// ReSharper disable once PossibleNullReferenceException
-						newSocket.Close();
+						newSocket.Shutdown(SocketShutdown.Both);
+						newSocket.Disconnect(false);
 						_stoppedAccepting = true;
 						return;
 					}
-
+					
 					_sockets.Add(newSocket);
 					_newConnectionHandler(newSocket);
 					StartReceiving(newSocket);
@@ -187,6 +205,18 @@ namespace DoubleSocket.Server {
 					if (token.Socket.ReceiveAsync(eventArgs)) {
 						break;
 					}
+				}
+			}
+		}
+
+		private void OnSent(object sender, SocketAsyncEventArgs eventArgs) {
+			if (eventArgs.SocketError != SocketError.Success) {
+				throw new SocketException((int)eventArgs.SocketError);
+			}
+
+			lock (this) {
+				if (_sendEventArgsQueue.Count < MaxCachedSendEventArgs) {
+					_sendEventArgsQueue.Enqueue(eventArgs);
 				}
 			}
 		}

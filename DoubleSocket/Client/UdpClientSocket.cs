@@ -61,7 +61,7 @@ namespace DoubleSocket.Client {
 		public void Close() {
 			lock (this) {
 				_socket.Shutdown(SocketShutdown.Both);
-				_socket.Close();
+				_socket.Disconnect(false);
 			}
 		}
 

@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
 using DoubleSocket.Protocol;
@@ -29,7 +30,8 @@ namespace DoubleSocket.Client {
 				_handler = handler;
 				_crypto = new FixedKeyCrypto(encryptionKey);
 				_tcpHelper = new TcpHelper(receiveBufferArraySize, OnTcpPacketAssembled);
-				_tcp = new TcpClientSocket(OnTcpConnected, _tcpHelper.OnTcpReceived, socketBufferSize, timeout);
+				_tcp = new TcpClientSocket(OnTcpConnected, ((buffer, size) =>
+					_tcpHelper.OnTcpReceived(null, buffer, size)), socketBufferSize, timeout);
 				_udp = new UdpClientSocket(OnUdpReceived, socketBufferSize, timeout);
 
 				_authenticationData = authenticationData;
@@ -88,7 +90,7 @@ namespace DoubleSocket.Client {
 			}
 		}
 
-		private void OnTcpPacketAssembled(byte[] buffer, int offset, int size) {
+		private void OnTcpPacketAssembled(Socket ignored, byte[] buffer, int offset, int size) {
 			lock (this) {
 				if (CurrentState == State.Authenticating) {
 					if (size == 1) {

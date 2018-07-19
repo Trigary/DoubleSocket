@@ -7,7 +7,7 @@ namespace DoubleSocket.Utility.ByteBuffer {
 	/// A buffer with a fixed size. Instances are stored internally and reused.
 	/// </summary>
 	public class CachedByteBuffer : ByteBuffer, IDisposable {
-		public const int MaxCachedBufferCount = 50;
+		public const int MaxCachedBufferCount = 20;
 		private static readonly HashSet<CachedByteBuffer> Buffers = new HashSet<CachedByteBuffer>();
 
 		/// <summary>
@@ -29,7 +29,7 @@ namespace DoubleSocket.Utility.ByteBuffer {
 
 		private CachedByteBuffer() {
 			lock (Buffers) {
-				base.Array = new byte[0]; //TODO set the length
+				base.Array = new byte[ushort.MaxValue];
 			}
 		}
 

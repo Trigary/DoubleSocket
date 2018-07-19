@@ -50,6 +50,8 @@
     <Compile Include="Protocol\TcpHelper.cs" />
     <Compile Include="Protocol\UdpHelper.cs" />
     <Compile Include="Server\DoubleServer.cs" />
+    <Compile Include="Server\DoubleServerClient.cs" />
+    <Compile Include="Server\IDoubleServerHandler.cs" />
     <Compile Include="Server\TcpServerSocket.cs" />
     <Compile Include="Server\UdpServerSocket.cs" />
     <Compile Include="Utility\ByteBuffer\ByteBuffer.cs" />

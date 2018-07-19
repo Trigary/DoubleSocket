@@ -68,6 +68,12 @@ namespace DoubleSocket.Utility.ByteBuffer {
 			}
 		}
 
+		public void Write(ulong value) {
+			for (int i = 0; i < 8; i++) {
+				Array[WriteIndex++] = (byte)(value >> i * 8);
+			}
+		}
+
 		public void Write(float value) {
 			byte[] bytes = BitConverter.GetBytes(value);
 			Buffer.BlockCopy(bytes, 0, Array, WriteIndex, 4);
@@ -116,6 +122,10 @@ namespace DoubleSocket.Utility.ByteBuffer {
 
 		public long ReadLong() {
 			return BitConverter.ToInt64(Array, ReadIndex);
+		}
+
+		public ulong ReadULong() {
+			return BitConverter.ToUInt64(Array, ReadIndex);
 		}
 
 		public float ReadFloat() {

@@ -27,8 +27,8 @@ namespace DoubleSocket.Server {
 		/// <param name="port">The port the server should listen on.</param>
 		/// <param name="socketBufferSize">The size of the socket's internal send and receive buffers.</param>
 		/// <param name="timeout">The timeout in millis for the socket's functions.</param>
-		public UdpServerSocket(ReceiveHandler receiveHandler, int receiveBufferArraySize,
-								int port, int socketBufferSize, int timeout) {
+		public UdpServerSocket(ReceiveHandler receiveHandler, int port, int socketBufferSize,
+								int timeout, int receiveBufferArraySize) {
 			lock (this) {
 				_receiveHandler = receiveHandler;
 				_port = port;
@@ -59,7 +59,7 @@ namespace DoubleSocket.Server {
 		public void Close() {
 			lock (this) {
 				_socket.Shutdown(SocketShutdown.Both);
-				_socket.Close();
+				_socket.Disconnect(false);
 			}
 		}
 

@@ -14,6 +14,7 @@ This section describes how the connections should be established and authenticat
 1) TCP handshake: a TCP connection is created between the server and the client
 
 2) TCP authentication: the client sends (encrypted) data to the server and the server accepts or denies the connection based on the received data.
+ALl TCP packets contain a 16-bit number prefix describing their size.
 All future TCP packets, including the response to the first packet, are encrypted.
 If the server accepts the connection, the response will be a 64-bit long key, otherwise it will 8 bits informing the client of the reason of the denial.
 The 64-bit long key's first' 32 bits mustn't equal the CRC-32 generated from its last 32 bits: this is how authentication and data packets are differentiated.

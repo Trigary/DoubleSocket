@@ -14,7 +14,7 @@ namespace DoubleSocket.Test {
 	public class SocketEchoTest {
 		public const string Ip = "127.0.0.1";
 		public const int Port = 8888;
-		public const int DataLength = 1000; //TODO will fragmentation happen here - will this test defragmentations?
+		public const int DataLength = 1000;
 		public const int SocketBufferSize = 3 * DataLength;
 		public const int Timeout = 1000;
 		public const int RunCount = 1000;

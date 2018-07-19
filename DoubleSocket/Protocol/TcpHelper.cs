@@ -1,9 +1,11 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Net.Sockets;
 using DoubleSocket.Utility.ByteBuffer;
 
 namespace DoubleSocket.Protocol {
 	public class TcpHelper {
-		public delegate void AssembledPacketHandler(byte[] buffer, int offset, int size);
+		public delegate void AssembledPacketHandler(Socket sender, byte[] buffer, int offset, int size);
 
 		private readonly byte[] _packetSizeBytes = new byte[2];
 		private readonly byte[] _packetBuffer;
@@ -18,6 +20,7 @@ namespace DoubleSocket.Protocol {
 		}
 
 
+		
 
 		// ReSharper disable once MemberCanBeMadeStatic.Global
 		public void WriteLength(ByteBuffer buffer, Action<ByteBuffer> packetWriter) {
@@ -28,9 +31,31 @@ namespace DoubleSocket.Protocol {
 			buffer.Array[1] = (byte)(size >> 8);
 		}
 
+		public static void DisconnectAsync(Socket socket, Queue<SocketAsyncEventArgs> eventArgsQueue,
+									EventHandler<SocketAsyncEventArgs> previousHandler) {
+			SocketAsyncEventArgs eventArgs;
+			if (eventArgsQueue.Count == 0) {
+				eventArgs = new SocketAsyncEventArgs();
+			} else {
+				eventArgs = eventArgsQueue.Dequeue();
+				eventArgs.Completed -= previousHandler;
+			}
+			
+			eventArgs.Completed += (sender, args) => {
+				if (args.SocketError != SocketError.Success) {
+					throw new SocketException((int)args.SocketError);
+				}
+			};
+			eventArgs.DisconnectReuseSocket = false;
+			socket.LingerState = new LingerOption(true, 1);
+
+			socket.Shutdown(SocketShutdown.Both);
+			socket.DisconnectAsync(eventArgs);
+		}
 
 
-		public void OnTcpReceived(byte[] buffer, int size) {
+
+		public void OnTcpReceived(Socket sender, byte[] buffer, int size) {
 			int offset = 0;
 			while (true) {
 				if (_packetSize == 0) {
@@ -45,7 +70,7 @@ namespace DoubleSocket.Protocol {
 						}
 
 						if (size - offset >= _packetSize) { //buffer contains a whole packet, no need to copy bytes
-							_assembledPacketHandler(buffer, offset, _packetSize);
+							_assembledPacketHandler(sender, buffer, offset, _packetSize);
 							_packetSize = 0;
 							continue;
 						}
@@ -61,7 +86,7 @@ namespace DoubleSocket.Protocol {
 				offset += copySize;
 
 				if (_savedPayloadBytes == _packetSize) {
-					_assembledPacketHandler(_packetBuffer, offset, _packetSize);
+					_assembledPacketHandler(sender, _packetBuffer, offset, _packetSize);
 					_savedPayloadBytes = 0;
 
 					if (offset < size) {
