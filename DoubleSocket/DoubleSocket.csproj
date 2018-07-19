@@ -55,7 +55,7 @@
     <Compile Include="Server\TcpServerSocket.cs" />
     <Compile Include="Server\UdpServerSocket.cs" />
     <Compile Include="Utility\ByteBuffer\ByteBuffer.cs" />
-    <Compile Include="Utility\ByteBuffer\CachedByteBuffer.cs" />
+    <Compile Include="Utility\ByteBuffer\ResettingByteBuffer.cs" />
     <Compile Include="Utility\ByteBuffer\MutableByteBuffer.cs" />
     <Compile Include="Utility\Crc32.cs" />
     <Compile Include="Utility\KeyCrypto\AnyKeyCrypto.cs" />

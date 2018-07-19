@@ -14,6 +14,7 @@ namespace DoubleSocket.Client {
 		public State CurrentState { get; private set; } = State.Disconnected;
 
 		private readonly MutableByteBuffer _receiveBuffer = new MutableByteBuffer();
+		private readonly ResettingByteBuffer _sendBuffer = new ResettingByteBuffer(ushort.MaxValue);
 		private readonly IDoubleClientHandler _handler;
 		private readonly FixedKeyCrypto _crypto;
 		private readonly TcpHelper _tcpHelper;
@@ -61,9 +62,9 @@ namespace DoubleSocket.Client {
 
 		public void SendTcp(Action<ByteBuffer> packetWriter) {
 			lock (this) {
-				using (CachedByteBuffer buffer = CachedByteBuffer.Get()) {
-					_tcpHelper.WriteLength(buffer, packetWriter);
-					byte[] encrypted = _crypto.Encrypt(buffer.Array, 0, buffer.WriteIndex);
+				using (_sendBuffer) {
+					_tcpHelper.WriteLength(_sendBuffer, packetWriter);
+					byte[] encrypted = _crypto.Encrypt(_sendBuffer.Array, 0, _sendBuffer.WriteIndex);
 					_tcp.Send(encrypted, 0, encrypted.Length);
 				}
 			}
@@ -71,9 +72,9 @@ namespace DoubleSocket.Client {
 
 		public void SendUdp(Action<ByteBuffer> packetWriter) {
 			lock (this) {
-				using (CachedByteBuffer buffer = CachedByteBuffer.Get()) {
-					UdpHelper.WriteCrc(buffer, packetWriter);
-					byte[] encrypted = _crypto.Encrypt(buffer.Array, 0, buffer.WriteIndex);
+				using (_sendBuffer) {
+					UdpHelper.WriteCrc(_sendBuffer, packetWriter);
+					byte[] encrypted = _crypto.Encrypt(_sendBuffer.Array, 0, _sendBuffer.WriteIndex);
 					_udp.Send(encrypted, 0, encrypted.Length);
 				}
 			}
@@ -83,9 +84,9 @@ namespace DoubleSocket.Client {
 
 		private void OnTcpConnected() {
 			lock (this) {
-				using (CachedByteBuffer buffer = CachedByteBuffer.Get()) {
-					_tcpHelper.WriteLength(buffer, instance => instance.Write(_authenticationData));
-					_tcp.Send(buffer.Array, 0, buffer.WriteIndex);
+				using (_sendBuffer) {
+					_tcpHelper.WriteLength(_sendBuffer, instance => instance.Write(_authenticationData));
+					_tcp.Send(_sendBuffer.Array, 0, _sendBuffer.WriteIndex);
 				}
 			}
 		}

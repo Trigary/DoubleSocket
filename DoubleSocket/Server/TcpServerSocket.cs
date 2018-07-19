@@ -32,11 +32,11 @@ namespace DoubleSocket.Server {
 		/// Whether the server is currently accepting new connections. True by default.
 		/// </summary>
 		public bool Accepting { get; private set; }
-
-		private readonly HashSet<Socket> _sockets = new HashSet<Socket>();
+		
 		private readonly Queue<SocketAsyncEventArgs> _sendEventArgsQueue = new Queue<SocketAsyncEventArgs>();
 		private readonly NewConnectionHandler _newConnectionHandler;
 		private readonly ReceiveHandler _receiveHandler;
+		private readonly ICollection<Socket> _connectedSockets;
 		private readonly int _receiveBufferArraySize;
 		private readonly Socket _socket;
 		private bool _stoppedAccepting = true;
@@ -47,15 +47,18 @@ namespace DoubleSocket.Server {
 		/// <param name="newConnectionHandler">The handler of new connections.</param>
 		/// <param name="receiveHandler">The handler of received data.</param>
 		/// <param name="receiveBufferArraySize">The size of the buffer used in the ReceiveHandler.</param>
+		/// <param name="connectedSockets">A collection which always contains all connected sockets.</param>
 		/// <param name="maxPendingConnections">The maximum count of pending connections (backlog).</param>
 		/// <param name="port">The port the server should listen on.</param>
 		/// <param name="socketBufferSize">The size of the socket's internal send and receive buffers.</param>
 		/// <param name="timeout">The timeout in millis for the socket's functions.</param>
-		public TcpServerSocket(NewConnectionHandler newConnectionHandler, ReceiveHandler receiveHandler, int maxPendingConnections,
-								int port, int socketBufferSize, int timeout, int receiveBufferArraySize) {
+		public TcpServerSocket(NewConnectionHandler newConnectionHandler, ReceiveHandler receiveHandler,
+								ICollection<Socket> connectedSockets, int maxPendingConnections, int port,
+								int socketBufferSize,  int timeout, int receiveBufferArraySize) {
 			lock (this) {
 				_newConnectionHandler = newConnectionHandler;
 				_receiveHandler = receiveHandler;
+				_connectedSockets = connectedSockets;
 				_receiveBufferArraySize = receiveBufferArraySize;
 
 				_socket = new Socket(SocketType.Stream, ProtocolType.Tcp) {
@@ -80,8 +83,8 @@ namespace DoubleSocket.Server {
 		public void Close() {
 			lock (this) {
 				Accepting = false;
-				TcpHelper.DisconnectAsync(_socket, _sendEventArgsQueue, OnSent);
-				foreach (Socket socket in _sockets) {
+				_socket.Close();
+				foreach (Socket socket in _connectedSockets) {
 					TcpHelper.DisconnectAsync(socket, _sendEventArgsQueue, OnSent);
 				}
 			}
@@ -93,7 +96,6 @@ namespace DoubleSocket.Server {
 		/// <param name="socket">The socket to kick.</param>
 		public void Disconnect(Socket socket) {
 			lock (this) {
-				_sockets.Remove(socket);
 				TcpHelper.DisconnectAsync(socket, _sendEventArgsQueue, OnSent);
 			}
 		}
@@ -170,11 +172,15 @@ namespace DoubleSocket.Server {
 						return;
 					}
 					
-					_sockets.Add(newSocket);
 					_newConnectionHandler(newSocket);
-					StartReceiving(newSocket);
-					if (_socket.AcceptAsync(eventArgs)) {
-						break;
+					if (Accepting) {
+						StartReceiving(newSocket);
+						if (_socket.AcceptAsync(eventArgs)) {
+							break;
+						}
+					} else {
+						_stoppedAccepting = true;
+						return;
 					}
 				}
 			}
@@ -182,6 +188,7 @@ namespace DoubleSocket.Server {
 
 		private void StartReceiving(Socket socket) {
 			SocketAsyncEventArgs eventArgs = new SocketAsyncEventArgs();
+			//TODO release this into a separate queue when the client disconnects
 			eventArgs.SetBuffer(new byte[_receiveBufferArraySize], 0, _receiveBufferArraySize);
 			eventArgs.UserToken = new UserToken(socket);
 			eventArgs.Completed += OnReceived;

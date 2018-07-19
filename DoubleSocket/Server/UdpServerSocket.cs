@@ -59,7 +59,7 @@ namespace DoubleSocket.Server {
 		public void Close() {
 			lock (this) {
 				_socket.Shutdown(SocketShutdown.Both);
-				_socket.Disconnect(false);
+				_socket.Close();
 			}
 		}
 

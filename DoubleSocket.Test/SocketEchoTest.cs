@@ -1,6 +1,8 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
+using System.Net.Sockets;
 using System.Threading;
 using DoubleSocket.Client;
 using DoubleSocket.Server;
@@ -27,7 +29,7 @@ namespace DoubleSocket.Test {
 
 			UdpServerSocket server = null;
 			server = new UdpServerSocket((sender, buffer, size) => server.Send(sender, buffer, 0, size),
-				DataLength, Port, SocketBufferSize, Timeout);
+				Port, SocketBufferSize, Timeout, DataLength);
 
 			byte[] sendBuffer = new byte[DataLength];
 			_random.NextBytes(sendBuffer);
@@ -50,6 +52,9 @@ namespace DoubleSocket.Test {
 			lock (monitor) {
 				Monitor.Wait(monitor);
 			}
+
+			client.Close();
+			server.Close();
 		}
 
 		[TestMethod]
@@ -58,9 +63,10 @@ namespace DoubleSocket.Test {
 			bool clientMaySend = false;
 			int runCounter = 0;
 
+			HashSet<Socket> connectedSockets = new HashSet<Socket>();
 			TcpServerSocket server = null;
-			server = new TcpServerSocket(socket => { }, (sender, buffer, size) =>
-				server.Send(sender, buffer, 0, size), DataLength, 10, Port, SocketBufferSize, Timeout);
+			server = new TcpServerSocket(socket => connectedSockets.Add(socket), (sender, buffer, size) =>
+				server.Send(sender, buffer, 0, size), connectedSockets, 10, Port, SocketBufferSize, Timeout, DataLength);
 
 			byte[] sendBuffer = new byte[DataLength];
 			_random.NextBytes(sendBuffer);
@@ -91,6 +97,9 @@ namespace DoubleSocket.Test {
 				Monitor.Pulse(monitor);
 				Monitor.Wait(monitor);
 			}
+
+			client.Close();
+			server.Close();
 		}
 	}
 }

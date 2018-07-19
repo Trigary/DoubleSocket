@@ -9,7 +9,7 @@ namespace DoubleSocket.Server {
 	}
 
 	public class DoubleServerClient : IDoubleServerClient {
-		public DoubleServer.ClientState State { get; private set; } = DoubleServer.ClientState.Authenticating;
+		public DoubleServer.ClientState State { get; private set; } = DoubleServer.ClientState.TcpAuthenticating;
 		public object ExtraData { get; set; }
 
 		public Socket TcpSocket { get; }
@@ -27,7 +27,7 @@ namespace DoubleSocket.Server {
 
 
 		public void TcpAuthenticated(byte[] encryptionKey, out ulong udpAuthenticationKey) {
-			State = DoubleServer.ClientState.UdpCreating;
+			State = DoubleServer.ClientState.UdpAuthenticating;
 			EncryptionKey = encryptionKey;
 			lock (Random) {
 				Random.NextBytes(RandomBytes);
@@ -37,12 +37,16 @@ namespace DoubleSocket.Server {
 		}
 
 		public bool IsUdpAuthenticatingWith(ulong key) {
-			return State == DoubleServer.ClientState.UdpCreating && key == _udpAuthenticationKey;
+			return State == DoubleServer.ClientState.UdpAuthenticating && key == _udpAuthenticationKey;
 		}
 
 		public void InitializeUdp(EndPoint endPoint) {
 			State = DoubleServer.ClientState.Connected;
 			UdpEndPoint = endPoint;
+		}
+
+		public void Disconnected() {
+			State = DoubleServer.ClientState.Disconnected;
 		}
 	}
 }

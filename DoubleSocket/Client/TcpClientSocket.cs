@@ -63,12 +63,14 @@ namespace DoubleSocket.Client {
 		/// <param name="port">The port on which to connect.</param>
 		/// /// <param name="receiveBufferArraySize">The size of the buffer used in the ReceiveHandler.</param>
 		public void Start(string ip, int port, int receiveBufferArraySize) {
-			SocketAsyncEventArgs eventArgs = new SocketAsyncEventArgs();
-			eventArgs.Completed += OnConnected;
-			eventArgs.RemoteEndPoint = new IPEndPoint(IPAddress.Parse(ip), port);
-			eventArgs.SetBuffer(new byte[receiveBufferArraySize], 0, receiveBufferArraySize);
-			if (!_socket.ConnectAsync(eventArgs)) {
-				OnConnected(null, eventArgs);
+			lock (this) {
+				SocketAsyncEventArgs eventArgs = new SocketAsyncEventArgs();
+				eventArgs.Completed += OnConnected;
+				eventArgs.RemoteEndPoint = new IPEndPoint(IPAddress.Parse(ip), port);
+				eventArgs.SetBuffer(new byte[receiveBufferArraySize], 0, receiveBufferArraySize);
+				if (!_socket.ConnectAsync(eventArgs)) {
+					OnConnected(null, eventArgs);
+				}
 			}
 		}
 
