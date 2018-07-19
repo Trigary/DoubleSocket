@@ -6,5 +6,7 @@ namespace DoubleSocket.Server {
 
 		void OnTcpReceived(IDoubleServerClient client, ByteBuffer buffer);
 		void OnUdpReceived(IDoubleServerClient client, ByteBuffer buffer);
+
+		void OnLostConnection(IDoubleServerClient client);
 	}
 }

@@ -85,6 +85,9 @@ namespace DoubleSocket.Client {
 			lock (this) {
 				while (true) {
 					if (eventArgs.SocketError != SocketError.Success) {
+						if (eventArgs.SocketError == SocketError.OperationAborted) {
+							return;
+						}
 						throw new SocketException((int)eventArgs.SocketError);
 					}
 

@@ -24,7 +24,7 @@ This key is linked to the client (therefore multiple clients mustn't have equal 
 The client gets kicked if it fails to send this packet in time.
 
 3) UDP connection and authentication: the client redundantly sends the received 64-bit long key (without encrypting it) over UDP multiple times.
-If it is accepted by the server, the client receives a packet (a single byte with the value of zero) over TCP.
+If it is accepted by the server, the client receives a packet over TCP.
 The client is kicked if the key expires.
 
 4) After the UDP socket is also ready, data can be sent over both the UDP and the TCP sockets.

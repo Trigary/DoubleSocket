@@ -23,10 +23,10 @@ namespace DoubleSocket.Server {
 		/// Creates a new instance with the specified options and instantly starts it.
 		/// </summary>
 		/// <param name="receiveHandler">The handler of received data.</param>
-		/// <param name="receiveBufferArraySize">The size of the buffer used in the ReceiveHandler.</param>
 		/// <param name="port">The port the server should listen on.</param>
 		/// <param name="socketBufferSize">The size of the socket's internal send and receive buffers.</param>
 		/// <param name="timeout">The timeout in millis for the socket's functions.</param>
+		/// <param name="receiveBufferArraySize">The size of the buffer used in the ReceiveHandler.</param>
 		public UdpServerSocket(ReceiveHandler receiveHandler, int port, int socketBufferSize,
 								int timeout, int receiveBufferArraySize) {
 			lock (this) {
@@ -82,6 +82,9 @@ namespace DoubleSocket.Server {
 			lock (this) {
 				while (true) {
 					if (eventArgs.SocketError != SocketError.Success) {
+						if (eventArgs.SocketError == SocketError.OperationAborted) {
+							return;
+						}
 						throw new SocketException((int)eventArgs.SocketError);
 					}
 

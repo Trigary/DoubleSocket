@@ -23,14 +23,14 @@ namespace DoubleSocket.Server {
 		private readonly TcpHelper _tcpHelper;
 		private readonly TcpServerSocket _tcp;
 		private readonly UdpServerSocket _udp;
-		private int _authenticatedCount; //TODO decrement whenever an authenticated loses connection
+		private int _authenticatedCount;
 
 		public DoubleServer(IDoubleServerHandler handler, int maxAuthenticatedCount, int maxPendingConnections,
 							int port, int socketBufferSize, int timeout, int receiveBufferArraySize) {
 			_handler = handler;
 			_maxAuthenticatedCount = maxAuthenticatedCount;
 			_tcpHelper = new TcpHelper(receiveBufferArraySize, OnTcpPacketAssembled);
-			_tcp = new TcpServerSocket(OnTcpConnected, _tcpHelper.OnTcpReceived, _tcpClients.Keys,
+			_tcp = new TcpServerSocket(OnTcpConnected, _tcpHelper.OnTcpReceived, OnTcpLostConnection, _tcpClients.Keys,
 				maxPendingConnections, port, socketBufferSize, timeout, receiveBufferArraySize);
 			_udp = new UdpServerSocket(OnUdpReceived, port, socketBufferSize, timeout, receiveBufferArraySize);
 		}
@@ -138,6 +138,14 @@ namespace DoubleSocket.Server {
 				} else {
 					Disconnect(client); //client sent data while it was UdpAuthenticating
 				}
+			}
+		}
+
+		private void OnTcpLostConnection(Socket socket) {
+			lock (this) {
+				DoubleServerClient client = _tcpClients[socket];
+				Disconnect(client);
+				_handler.OnLostConnection(client);
 			}
 		}
 

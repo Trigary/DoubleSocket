@@ -20,7 +20,6 @@ namespace DoubleSocket.Protocol {
 		}
 
 
-		
 
 		// ReSharper disable once MemberCanBeMadeStatic.Global
 		public void WriteLength(ByteBuffer buffer, Action<ByteBuffer> packetWriter) {
@@ -32,7 +31,7 @@ namespace DoubleSocket.Protocol {
 		}
 
 		public static void DisconnectAsync(Socket socket, Queue<SocketAsyncEventArgs> eventArgsQueue,
-									EventHandler<SocketAsyncEventArgs> previousHandler) {
+											EventHandler<SocketAsyncEventArgs> previousHandler) {
 			SocketAsyncEventArgs eventArgs;
 			if (eventArgsQueue.Count == 0) {
 				eventArgs = new SocketAsyncEventArgs();
@@ -40,7 +39,7 @@ namespace DoubleSocket.Protocol {
 				eventArgs = eventArgsQueue.Dequeue();
 				eventArgs.Completed -= previousHandler;
 			}
-			
+
 			eventArgs.Completed += (sender, args) => {
 				if (args.SocketError != SocketError.Success) {
 					throw new SocketException((int)args.SocketError);
@@ -51,6 +50,23 @@ namespace DoubleSocket.Protocol {
 
 			socket.Shutdown(SocketShutdown.Both);
 			socket.DisconnectAsync(eventArgs);
+		}
+
+		public static bool ShouldHandleError(SocketAsyncEventArgs eventArgs, out bool isRemoteShutdown) {
+			switch (eventArgs.SocketError) {
+				case SocketError.Success:
+					isRemoteShutdown = eventArgs.BytesTransferred == 0;
+					return isRemoteShutdown;
+				case SocketError.OperationAborted:
+					isRemoteShutdown = false;
+					return true;
+				case SocketError.ConnectionReset:
+				case SocketError.Disconnecting:
+					isRemoteShutdown = true;
+					return true;
+				default:
+					throw new SocketException((int)eventArgs.SocketError);
+			}
 		}
 
 

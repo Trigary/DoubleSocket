@@ -31,8 +31,8 @@ namespace DoubleSocket.Client {
 				_handler = handler;
 				_crypto = new FixedKeyCrypto(encryptionKey);
 				_tcpHelper = new TcpHelper(receiveBufferArraySize, OnTcpPacketAssembled);
-				_tcp = new TcpClientSocket(OnTcpConnected, ((buffer, size) =>
-					_tcpHelper.OnTcpReceived(null, buffer, size)), socketBufferSize, timeout);
+				_tcp = new TcpClientSocket(OnTcpConnected, OnTcpConnectionFailed, ((buffer, size) =>
+					_tcpHelper.OnTcpReceived(null, buffer, size)), OnTcpLostConnection, socketBufferSize, timeout);
 				_udp = new UdpClientSocket(OnUdpReceived, socketBufferSize, timeout);
 
 				_authenticationData = authenticationData;
@@ -46,7 +46,7 @@ namespace DoubleSocket.Client {
 
 		public void Start() {
 			lock (this) {
-				CurrentState = State.Authenticating;
+				CurrentState = State.TcpAuthenticating;
 				_tcp.Start(_ip, _port, _receiveBufferArraySize);
 			}
 		}
@@ -91,41 +91,50 @@ namespace DoubleSocket.Client {
 			}
 		}
 
+		private void OnTcpConnectionFailed(SocketError error) {
+			lock (this) {
+				Close();
+				_handler.OnConnectionFailure(error);
+			}
+		}
+
 		private void OnTcpPacketAssembled(Socket ignored, byte[] buffer, int offset, int size) {
 			lock (this) {
-				if (CurrentState == State.Authenticating) {
+				if (CurrentState == State.TcpAuthenticating) {
 					if (size == 1) {
 						Close();
 						_handler.OnAuthenticationFailure(buffer[offset]);
 					} else {
-						CurrentState = State.UdpCreating;
+						CurrentState = State.UdpAuthenticating;
 						_udp.Start(_ip, _port, _receiveBufferArraySize);
 						byte[] toSend = new byte[size];
 						Buffer.BlockCopy(buffer, offset, toSend, 0, size);
 						Task.Run(() => {
 							lock (this) {
 								int counter = 0;
-								while (CurrentState == State.UdpCreating && counter++ < UdpCreatingPacketSendCount) {
+								while (CurrentState == State.UdpAuthenticating && counter++ < UdpCreatingPacketSendCount) {
 									_udp.Send(toSend, 0, toSend.Length);
 									Thread.Sleep(1000 / UdpCreatingPacketFrequency);
 								}
 							}
 						});
 					}
-				} else if (CurrentState == State.UdpCreating) {
-					if (buffer[offset] == 0) {
-						CurrentState = State.Connected;
-						_handler.OnSuccessfulConnect();
-					} else {
-						Close();
-						_handler.OnUdpConnectionFailure();
-					}
+				} else if (CurrentState == State.UdpAuthenticating) {
+					CurrentState = State.Connected;
+					_handler.OnSuccessfulConnect();
 				} else {
 					_receiveBuffer.Array = _crypto.Decrypt(buffer, offset, size);
 					_receiveBuffer.WriteIndex = _receiveBuffer.Array.Length;
 					_receiveBuffer.ReadIndex = 0;
 					_handler.OnTcpReceived(_receiveBuffer);
 				}
+			}
+		}
+
+		private void OnTcpLostConnection() {
+			lock (this) {
+				Close();
+				_handler.OnConnectionLost();
 			}
 		}
 
@@ -145,8 +154,8 @@ namespace DoubleSocket.Client {
 
 		public enum State {
 			Disconnected,
-			Authenticating,
-			UdpCreating,
+			TcpAuthenticating,
+			UdpAuthenticating,
 			Connected
 		}
 	}
