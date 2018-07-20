@@ -5,10 +5,10 @@ using System.Net.Sockets;
 using System.Threading;
 using DoubleSocket.Client;
 using DoubleSocket.Server;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
+using NUnit.Framework;
 
 namespace DoubleSocket.Test {
-	[TestClass]
+	[TestFixture]
 	[SuppressMessage("ReSharper", "PossibleNullReferenceException")]
 	[SuppressMessage("ReSharper", "AccessToModifiedClosure")]
 	[SuppressMessage("ReSharper", "ImplicitlyCapturedClosure")]
@@ -21,7 +21,7 @@ namespace DoubleSocket.Test {
 		public const int RunCount = 1000;
 		private readonly Random _random = new Random();
 
-		[TestMethod]
+		[Test]
 		public void UdpTest() {
 			object monitor = new object();
 			lock (monitor) {
@@ -67,7 +67,7 @@ namespace DoubleSocket.Test {
 			}
 		}
 
-		[TestMethod]
+		[Test]
 		public void TcpTest() {
 			object monitor = new object();
 			lock (monitor) {

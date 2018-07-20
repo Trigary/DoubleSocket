@@ -1,15 +1,15 @@
 ﻿using System.Text;
 using DoubleSocket.Utility;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
+using NUnit.Framework;
 
 namespace DoubleSocket.Test {
-	[TestClass]
+	[TestFixture]
 	public class Crc32Test {
 		private const string First = "H";
 		private const string Second = "Hello";
 		private const string Third = "Hello dear human/nonhuman being looking at this!";
 
-		[TestMethod]
+		[Test]
 		public void Test() {
 			byte[] first = GetBytes(First);
 			byte[] second = GetBytes(Second);

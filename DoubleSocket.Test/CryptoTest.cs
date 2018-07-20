@@ -1,16 +1,16 @@
 ﻿using System;
 using DoubleSocket.Utility.KeyCrypto;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
+using NUnit.Framework;
 
 namespace DoubleSocket.Test {
-	[TestClass]
+	[TestFixture]
 	public class CryptoTest {
 		public const int KeyLength = 16;
 		public const int KeyCount = 100;
 		public const int MaxDataLength = 1300;
 		public const int DataPerKeyCount = 100;
 
-		[TestMethod]
+		[Test]
 		public void TestFixedKeyCrypto() {
 			Random random = new Random();
 			byte[] key = new byte[KeyLength];
@@ -29,7 +29,7 @@ namespace DoubleSocket.Test {
 			}
 		}
 
-		[TestMethod]
+		[Test]
 		public void TestAnyKeyCrypto() {
 			Random random = new Random();
 			AnyKeyCrypto crypto = new AnyKeyCrypto();
