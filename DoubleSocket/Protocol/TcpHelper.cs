@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Net.Sockets;
-using DoubleSocket.Utility.ByteBuffer;
 
 namespace DoubleSocket.Protocol {
 	public class TcpHelper {
@@ -21,15 +20,6 @@ namespace DoubleSocket.Protocol {
 
 
 
-		// ReSharper disable once MemberCanBeMadeStatic.Global
-		public void WriteLength(ByteBuffer buffer, Action<ByteBuffer> packetWriter) {
-			buffer.WriteIndex = 2;
-			packetWriter(buffer);
-			ushort size = (ushort)buffer.WriteIndex;
-			buffer.Array[0] = (byte)size;
-			buffer.Array[1] = (byte)(size >> 8);
-		}
-
 		public static void DisconnectAsync(Socket socket, Queue<SocketAsyncEventArgs> eventArgsQueue,
 											EventHandler<SocketAsyncEventArgs> previousHandler) {
 			SocketAsyncEventArgs eventArgs;
@@ -47,7 +37,7 @@ namespace DoubleSocket.Protocol {
 			};
 			eventArgs.DisconnectReuseSocket = false;
 			socket.LingerState = new LingerOption(true, 1);
-
+			
 			socket.Shutdown(SocketShutdown.Both);
 			socket.DisconnectAsync(eventArgs);
 		}

@@ -8,8 +8,9 @@ using DoubleSocket.Utility.KeyCrypto;
 
 namespace DoubleSocket.Client {
 	public class DoubleClient {
-		public const int UdpCreatingPacketFrequency = 30;
-		public const int UdpCreatingPacketSendCount = 5 * UdpCreatingPacketFrequency;
+		public const int TcpAuthenticationTimeout = 5000;
+		public const int UdpAuthenticationPacketFrequency = 30;
+		public const int UdpAuthenticationPacketSendCount = 5 * UdpAuthenticationPacketFrequency;
 
 		public State CurrentState { get; private set; } = State.Disconnected;
 
@@ -17,28 +18,29 @@ namespace DoubleSocket.Client {
 		private readonly ResettingByteBuffer _sendBuffer = new ResettingByteBuffer(ushort.MaxValue);
 		private readonly IDoubleClientHandler _handler;
 		private readonly FixedKeyCrypto _crypto;
-		private readonly TcpHelper _tcpHelper;
 		private readonly TcpClientSocket _tcp;
 		private readonly UdpClientSocket _udp;
-		private readonly byte[] _authenticationData;
 		private readonly string _ip;
 		private readonly int _port;
-		private readonly int _receiveBufferArraySize;
+		private byte[] _authenticationData;
+		private byte _sequenceIdBound;
+		private long _connectionStartTimestamp;
+		private byte _sendSequenceId;
+		private byte _receiveSequenceId;
 
 		public DoubleClient(IDoubleClientHandler handler, byte[] encryptionKey, byte[] authenticationData,
-							string ip, int port, int socketBufferSize, int timeout, int receiveBufferArraySize) {
+							string ip, int port, int socketBufferSize, int timeout, int bufferArraySize) {
 			lock (this) {
 				_handler = handler;
 				_crypto = new FixedKeyCrypto(encryptionKey);
-				_tcpHelper = new TcpHelper(receiveBufferArraySize, OnTcpPacketAssembled);
+				TcpHelper tcpHelper = new TcpHelper(bufferArraySize, OnTcpPacketAssembled);
 				_tcp = new TcpClientSocket(OnTcpConnected, OnTcpConnectionFailed, ((buffer, size) =>
-					_tcpHelper.OnTcpReceived(null, buffer, size)), OnTcpLostConnection, socketBufferSize, timeout);
-				_udp = new UdpClientSocket(OnUdpReceived, socketBufferSize, timeout);
+					tcpHelper.OnTcpReceived(null, buffer, size)), OnTcpLostConnection, socketBufferSize, timeout, bufferArraySize);
+				_udp = new UdpClientSocket(OnUdpReceived, socketBufferSize, timeout, bufferArraySize);
 
 				_authenticationData = authenticationData;
 				_ip = ip;
 				_port = port;
-				_receiveBufferArraySize = receiveBufferArraySize;
 			}
 		}
 
@@ -47,7 +49,7 @@ namespace DoubleSocket.Client {
 		public void Start() {
 			lock (this) {
 				CurrentState = State.TcpAuthenticating;
-				_tcp.Start(_ip, _port, _receiveBufferArraySize);
+				_tcp.Start(_ip, _port);
 			}
 		}
 
@@ -60,20 +62,31 @@ namespace DoubleSocket.Client {
 			}
 		}
 
-		public void SendTcp(Action<ByteBuffer> packetWriter) {
+
+		
+		public void SendTcp(Action<ByteBuffer> payloadWriter) {
 			lock (this) {
+				byte[] encrypted;
 				using (_sendBuffer) {
-					_tcpHelper.WriteLength(_sendBuffer, packetWriter);
-					byte[] encrypted = _crypto.Encrypt(_sendBuffer.Array, 0, _sendBuffer.WriteIndex);
-					_tcp.Send(encrypted, 0, encrypted.Length);
+					_sendBuffer.Write(_sendSequenceId);
+					if (++_sendSequenceId == _sequenceIdBound) {
+						_sendSequenceId = 0;
+					}
+					payloadWriter(_sendBuffer);
+					encrypted = _crypto.Encrypt(_sendBuffer.Array, 0, _sendBuffer.WriteIndex);
+				}
+				using (_sendBuffer) {
+					_sendBuffer.Write((ushort)encrypted.Length);
+					_sendBuffer.Write(encrypted);
+					_tcp.Send(_sendBuffer.Array, 0, _sendBuffer.WriteIndex);
 				}
 			}
 		}
 
-		public void SendUdp(Action<ByteBuffer> packetWriter) {
+		public void SendUdp(Action<ByteBuffer> payloadWriter) {
 			lock (this) {
 				using (_sendBuffer) {
-					UdpHelper.WriteCrc(_sendBuffer, packetWriter);
+					UdpHelper.WritePrefix(_sendBuffer, _connectionStartTimestamp, payloadWriter);
 					byte[] encrypted = _crypto.Encrypt(_sendBuffer.Array, 0, _sendBuffer.WriteIndex);
 					_udp.Send(encrypted, 0, encrypted.Length);
 				}
@@ -85,8 +98,21 @@ namespace DoubleSocket.Client {
 		private void OnTcpConnected() {
 			lock (this) {
 				using (_sendBuffer) {
-					_tcpHelper.WriteLength(_sendBuffer, instance => instance.Write(_authenticationData));
+					_sendBuffer.WriteIndex = 2;
+					_sendBuffer.Write(_authenticationData);
+					_authenticationData = null;
+					ushort size = (ushort)(_sendBuffer.WriteIndex - 2);
+					_sendBuffer.Array[0] = (byte)size;
+					_sendBuffer.Array[1] = (byte)(size >> 8);
 					_tcp.Send(_sendBuffer.Array, 0, _sendBuffer.WriteIndex);
+
+					Task.Delay(TcpAuthenticationTimeout).ContinueWith(task => {
+						lock (this) {
+							if (CurrentState == State.TcpAuthenticating) {
+								OnTcpLostConnection();
+							}
+						}
+					});
 				}
 			}
 		}
@@ -100,33 +126,47 @@ namespace DoubleSocket.Client {
 
 		private void OnTcpPacketAssembled(Socket ignored, byte[] buffer, int offset, int size) {
 			lock (this) {
+				_receiveBuffer.Array = _crypto.Decrypt(buffer, offset, size);
+				_receiveBuffer.WriteIndex = _receiveBuffer.Array.Length;
+				_receiveBuffer.ReadIndex = 0;
+
 				if (CurrentState == State.TcpAuthenticating) {
-					if (size == 1) {
+					if (_receiveBuffer.Array.Length == 1) {
 						Close();
-						_handler.OnAuthenticationFailure(buffer[offset]);
+						_handler.OnAuthenticationFailure(_receiveBuffer.ReadByte());
 					} else {
 						CurrentState = State.UdpAuthenticating;
-						_udp.Start(_ip, _port, _receiveBufferArraySize);
-						byte[] toSend = new byte[size];
-						Buffer.BlockCopy(buffer, offset, toSend, 0, size);
+						_sequenceIdBound = _receiveBuffer.ReadByte();
+						byte[] udpAuthenticationKey = _receiveBuffer.ReadBytes(8);
+						_connectionStartTimestamp = _receiveBuffer.ReadLong();
+
+						_udp.Start(_ip, _port);
 						Task.Run(() => {
 							lock (this) {
 								int counter = 0;
-								while (CurrentState == State.UdpAuthenticating && counter++ < UdpCreatingPacketSendCount) {
-									_udp.Send(toSend, 0, toSend.Length);
-									Thread.Sleep(1000 / UdpCreatingPacketFrequency);
+								while (counter++ < UdpAuthenticationPacketSendCount) {
+									_udp.Send(udpAuthenticationKey, 0, udpAuthenticationKey.Length);
+									Monitor.Wait(udpAuthenticationKey, 1000 / UdpAuthenticationPacketFrequency);
+									if (CurrentState != State.UdpAuthenticating) {
+										return;
+									}
 								}
+								OnTcpLostConnection();
 							}
 						});
 					}
 				} else if (CurrentState == State.UdpAuthenticating) {
-					CurrentState = State.Connected;
-					_handler.OnSuccessfulConnect();
+					if (_receiveBuffer.Array.Length == 1 && _receiveBuffer.ReadByte() == 0) {
+						CurrentState = State.Authenticated;
+						_handler.OnSuccessfulAuthentication();
+					}
 				} else {
-					_receiveBuffer.Array = _crypto.Decrypt(buffer, offset, size);
-					_receiveBuffer.WriteIndex = _receiveBuffer.Array.Length;
-					_receiveBuffer.ReadIndex = 0;
-					_handler.OnTcpReceived(_receiveBuffer);
+					if (_receiveBuffer.ReadByte() == _receiveSequenceId) {
+						if (++_receiveSequenceId == _sequenceIdBound) {
+							_receiveSequenceId = 0;
+						}
+						_handler.OnTcpReceived(_receiveBuffer);
+					}
 				}
 			}
 		}
@@ -144,8 +184,8 @@ namespace DoubleSocket.Client {
 				_receiveBuffer.WriteIndex = _receiveBuffer.Array.Length;
 				_receiveBuffer.ReadIndex = 0;
 
-				if (UdpHelper.CrcCheck(_receiveBuffer)) {
-					_handler.OnUdpReceived(_receiveBuffer);
+				if (UdpHelper.PrefixCheck(_receiveBuffer, out ushort packetTimestamp)) {
+					_handler.OnUdpReceived(_receiveBuffer, packetTimestamp);
 				}
 			}
 		}
@@ -156,7 +196,7 @@ namespace DoubleSocket.Client {
 			Disconnected,
 			TcpAuthenticating,
 			UdpAuthenticating,
-			Connected
+			Authenticated
 		}
 	}
 }

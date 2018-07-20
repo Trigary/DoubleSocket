@@ -7,6 +7,18 @@ namespace DoubleSocket.Utility.KeyCrypto {
 	/// A class which gets initialized with a specific encryption key and can encrypt data with that.
 	/// </summary>
 	public class FixedKeyCrypto : IDisposable {
+		public static byte[] Iv {
+			get {
+				byte[] iv = new byte[16];
+				for (int i = 0; i < iv.Length; i++) {
+					iv[i] = (byte)(i * (iv.Length + i));
+				}
+				return iv;
+			}
+		}
+
+
+
 		private readonly Aes _aes;
 
 		/// <summary>
@@ -19,7 +31,7 @@ namespace DoubleSocket.Utility.KeyCrypto {
 			_aes.Mode = CipherMode.CBC;
 			_aes.Padding = PaddingMode.PKCS7;
 			_aes.Key = encryptionKey;
-			_aes.IV = new byte[16];
+			_aes.IV = Iv;
 		}
 
 

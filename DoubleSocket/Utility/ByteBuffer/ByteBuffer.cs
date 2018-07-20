@@ -20,6 +20,11 @@ namespace DoubleSocket.Utility.ByteBuffer {
 		/// </summary>
 		public int ReadIndex { get; set; }
 
+		/// <summary>
+		/// The count of remaining bytes in the buffer, shortcut for WriteIndex - ReadIndex.
+		/// </summary>
+		public int BytesLeft => WriteIndex - ReadIndex;
+
 
 
 		/// <summary>
@@ -151,7 +156,7 @@ namespace DoubleSocket.Utility.ByteBuffer {
 		}
 
 		public byte[] ReadBytes() {
-			return ReadBytes(WriteIndex - ReadIndex);
+			return ReadBytes(BytesLeft);
 		}
 	}
 }

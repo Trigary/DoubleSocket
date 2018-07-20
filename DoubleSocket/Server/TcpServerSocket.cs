@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
 using DoubleSocket.Protocol;
@@ -45,7 +46,7 @@ namespace DoubleSocket.Server {
 		private readonly ReceiveHandler _receiveHandler;
 		private readonly ConnectionLostHandler _connectionLostHandler;
 		private readonly ICollection<Socket> _connectedSockets;
-		private readonly int _receiveBufferArraySize;
+		private readonly int _bufferArraySize;
 		private readonly Socket _socket;
 		private bool _stoppedAccepting = true;
 
@@ -60,16 +61,16 @@ namespace DoubleSocket.Server {
 		/// <param name="port">The port the server should listen on.</param>
 		/// <param name="socketBufferSize">The size of the socket's internal send and receive buffers.</param>
 		/// <param name="timeout">The timeout in millis for the socket's functions.</param>
-		/// <param name="receiveBufferArraySize">The size of the buffer used in the ReceiveHandler.</param>
+		/// <param name="bufferArraySize">The size of the buffer used to send and receive data.</param>
 		public TcpServerSocket(NewConnectionHandler newConnectionHandler, ReceiveHandler receiveHandler,
 								ConnectionLostHandler connectionLostHandler, ICollection<Socket> connectedSockets,
-								int maxPendingConnections, int port, int socketBufferSize, int timeout, int receiveBufferArraySize) {
+								int maxPendingConnections, int port, int socketBufferSize, int timeout, int bufferArraySize) {
 			lock (this) {
 				_newConnectionHandler = newConnectionHandler;
 				_receiveHandler = receiveHandler;
 				_connectionLostHandler = connectionLostHandler;
 				_connectedSockets = connectedSockets;
-				_receiveBufferArraySize = receiveBufferArraySize;
+				_bufferArraySize = bufferArraySize;
 
 				_socket = new Socket(SocketType.Stream, ProtocolType.Tcp) {
 					ReceiveBufferSize = socketBufferSize,
@@ -129,11 +130,12 @@ namespace DoubleSocket.Server {
 				if (_sendEventArgsQueue.Count == 0) {
 					eventArgs = new SocketAsyncEventArgs();
 					eventArgs.Completed += OnSent;
+					eventArgs.SetBuffer(new byte[_bufferArraySize], 0, _bufferArraySize);
 				} else {
 					eventArgs = _sendEventArgsQueue.Dequeue();
 				}
-
-				eventArgs.SetBuffer(data, offset, size);
+				
+				Buffer.BlockCopy(data, offset, eventArgs.Buffer, eventArgs.Offset, size);
 				if (!recipient.SendAsync(eventArgs)) {
 					OnSent(null, eventArgs);
 				}
@@ -209,7 +211,7 @@ namespace DoubleSocket.Server {
 			SocketAsyncEventArgs eventArgs;
 			if (_receiveEventArgsQueue.Count == 0) {
 				eventArgs = new SocketAsyncEventArgs();
-				eventArgs.SetBuffer(new byte[_receiveBufferArraySize], 0, _receiveBufferArraySize);
+				eventArgs.SetBuffer(new byte[_bufferArraySize], 0, _bufferArraySize);
 				eventArgs.Completed += OnReceived;
 				eventArgs.UserToken = new UserToken();
 			} else {

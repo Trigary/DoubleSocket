@@ -52,8 +52,8 @@ namespace DoubleSocket.Test {
 							client.Send(sendBuffer, 0, sendBuffer.Length);
 						}
 					}
-				}, SocketBufferSize, Timeout);
-				client.Start(Ip, Port, DataLength + 1);
+				}, SocketBufferSize, Timeout, DataLength + 1);
+				client.Start(Ip, Port);
 
 				Console.WriteLine("Client sending data first data");
 				client.Send(sendBuffer, 0, sendBuffer.Length);
@@ -128,8 +128,8 @@ namespace DoubleSocket.Test {
 								client.Send(sendBuffer, 0, sendBuffer.Length);
 							}
 						}
-					}, () => Console.WriteLine("Client lost connection to server"), SocketBufferSize, Timeout);
-				client.Start(Ip, Port, DataLength + 1);
+					}, () => Console.WriteLine("Client lost connection to server"), SocketBufferSize, Timeout, DataLength + 1);
+				client.Start(Ip, Port);
 
 				clientMaySend = true;
 				Monitor.Pulse(monitor);

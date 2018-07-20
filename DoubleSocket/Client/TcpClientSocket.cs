@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
 using DoubleSocket.Protocol;
@@ -43,6 +44,7 @@ namespace DoubleSocket.Client {
 		private readonly ReceiveHandler _receiveHandler;
 		private readonly ConnectionLostHandler _connectionLostHandler;
 		private readonly Socket _socket;
+		private readonly int _bufferArraySize;
 
 		/// <summary>
 		/// Creates a new instance with the specified options.
@@ -53,9 +55,10 @@ namespace DoubleSocket.Client {
 		/// <param name="connectionLostHandler">The handler of the disconnect.</param>
 		/// <param name="socketBufferSize">The size of the socket's internal send and receive buffers.</param>
 		/// <param name="timeout">The timeout in millis for the socket's functions.</param>
+		/// <param name="bufferArraySize">The size of the buffer used to send and receive data.</param>
 		public TcpClientSocket(SuccessfulConnectHandler successfulConnectHandler, FailedConnectHandler failedConnectHandler,
 								ReceiveHandler receiveHandler, ConnectionLostHandler connectionLostHandler,
-								int socketBufferSize, int timeout) {
+								int socketBufferSize, int timeout, int bufferArraySize) {
 			lock (this) {
 				_successfulConnectHandler = successfulConnectHandler;
 				_failedConnectHandler = failedConnectHandler;
@@ -70,6 +73,7 @@ namespace DoubleSocket.Client {
 					NoDelay = true
 				};
 				_socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, true);
+				_bufferArraySize = bufferArraySize;
 			}
 		}
 
@@ -80,13 +84,12 @@ namespace DoubleSocket.Client {
 		/// </summary>
 		/// <param name="ip">The IP to connect to.</param>
 		/// <param name="port">The port on which to connect.</param>
-		/// /// <param name="receiveBufferArraySize">The size of the buffer used in the ReceiveHandler.</param>
-		public void Start(string ip, int port, int receiveBufferArraySize) {
+		public void Start(string ip, int port) {
 			lock (this) {
 				SocketAsyncEventArgs eventArgs = new SocketAsyncEventArgs();
 				eventArgs.Completed += OnConnected;
 				eventArgs.RemoteEndPoint = new IPEndPoint(IPAddress.Parse(ip), port);
-				eventArgs.SetBuffer(new byte[receiveBufferArraySize], 0, receiveBufferArraySize);
+				eventArgs.SetBuffer(new byte[_bufferArraySize], 0, _bufferArraySize);
 				if (!_socket.ConnectAsync(eventArgs)) {
 					OnConnected(null, eventArgs);
 				}
@@ -98,12 +101,18 @@ namespace DoubleSocket.Client {
 		/// </summary>
 		public void Close() {
 			lock (this) {
-				TcpHelper.DisconnectAsync(_socket, _sendEventArgsQueue, OnSent);
+				if (_socket.Connected) {
+					TcpHelper.DisconnectAsync(_socket, _sendEventArgsQueue, OnSent);
+				} else {
+					_socket.Close();
+				}
 			}
 		}
 
 		private void ForcedClose() {
-			_socket.Shutdown(SocketShutdown.Both);
+			if (_socket.Connected) {
+				_socket.Shutdown(SocketShutdown.Both);
+			}
 			_socket.Close();
 		}
 
@@ -119,11 +128,12 @@ namespace DoubleSocket.Client {
 				if (_sendEventArgsQueue.Count == 0) {
 					eventArgs = new SocketAsyncEventArgs();
 					eventArgs.Completed += OnSent;
+					eventArgs.SetBuffer(new byte[_bufferArraySize], 0, _bufferArraySize);
 				} else {
 					eventArgs = _sendEventArgsQueue.Dequeue();
 				}
-
-				eventArgs.SetBuffer(data, offset, size);
+				
+				Buffer.BlockCopy(data, offset, eventArgs.Buffer, eventArgs.Offset, size);
 				if (!_socket.SendAsync(eventArgs)) {
 					OnSent(null, eventArgs);
 				}

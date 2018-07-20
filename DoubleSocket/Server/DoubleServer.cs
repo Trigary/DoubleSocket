@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading.Tasks;
@@ -15,24 +14,26 @@ namespace DoubleSocket.Server {
 
 		private readonly IDictionary<Socket, DoubleServerClient> _tcpClients = new Dictionary<Socket, DoubleServerClient>();
 		private readonly IDictionary<EndPoint, DoubleServerClient> _udpClients = new Dictionary<EndPoint, DoubleServerClient>();
+		private readonly IDictionary<ulong, DoubleServerClient> _udpAuthenticationKeys = new Dictionary<ulong, DoubleServerClient>();
 		private readonly MutableByteBuffer _receiveBuffer = new MutableByteBuffer();
 		private readonly ResettingByteBuffer _sendBuffer = new ResettingByteBuffer(ushort.MaxValue);
 		private readonly AnyKeyCrypto _crypto = new AnyKeyCrypto();
 		private readonly IDoubleServerHandler _handler;
 		private readonly int _maxAuthenticatedCount;
-		private readonly TcpHelper _tcpHelper;
 		private readonly TcpServerSocket _tcp;
 		private readonly UdpServerSocket _udp;
 		private int _authenticatedCount;
 
 		public DoubleServer(IDoubleServerHandler handler, int maxAuthenticatedCount, int maxPendingConnections,
 							int port, int socketBufferSize, int timeout, int receiveBufferArraySize) {
-			_handler = handler;
-			_maxAuthenticatedCount = maxAuthenticatedCount;
-			_tcpHelper = new TcpHelper(receiveBufferArraySize, OnTcpPacketAssembled);
-			_tcp = new TcpServerSocket(OnTcpConnected, _tcpHelper.OnTcpReceived, OnTcpLostConnection, _tcpClients.Keys,
-				maxPendingConnections, port, socketBufferSize, timeout, receiveBufferArraySize);
-			_udp = new UdpServerSocket(OnUdpReceived, port, socketBufferSize, timeout, receiveBufferArraySize);
+			lock (this) {
+				_handler = handler;
+				_maxAuthenticatedCount = maxAuthenticatedCount;
+				TcpHelper tcpHelper = new TcpHelper(receiveBufferArraySize, OnTcpPacketAssembled);
+				_tcp = new TcpServerSocket(OnTcpConnected, tcpHelper.OnTcpReceived, OnTcpLostConnection, _tcpClients.Keys,
+					maxPendingConnections, port, socketBufferSize, timeout, receiveBufferArraySize);
+				_udp = new UdpServerSocket(OnUdpReceived, port, socketBufferSize, timeout, receiveBufferArraySize);
+			}
 		}
 
 
@@ -61,22 +62,36 @@ namespace DoubleSocket.Server {
 			}
 		}
 
-		public void SendTcp(IDoubleServerClient recipient, Action<ByteBuffer> packetWriter) {
+
+
+		public void SendTcp(IDoubleServerClient recipient, Action<ByteBuffer> payloadWriter) {
 			lock (this) {
 				DoubleServerClient client = (DoubleServerClient)recipient;
-				using (_sendBuffer) {
-					_tcpHelper.WriteLength(_sendBuffer, packetWriter);
-					byte[] encrypted = _crypto.Encrypt(client.EncryptionKey, _sendBuffer.Array, 0, _sendBuffer.WriteIndex);
-					_tcp.Send(client.TcpSocket, encrypted, 0, encrypted.Length);
-				}
+				SendEncryptedLengthPrefixOnlyTcp(client.TcpSocket, client.EncryptionKey, buffer => {
+					buffer.Write(client.NextSendSequenceId());
+					payloadWriter(buffer);
+				});
 			}
 		}
 
-		public void SendUdp(IDoubleServerClient recipient, Action<ByteBuffer> packetWriter) {
+		private void SendEncryptedLengthPrefixOnlyTcp(Socket recipient, byte[] encryptionKey, Action<ByteBuffer> payloadWriter) {
+			byte[] encrypted;
+			using (_sendBuffer) {
+				payloadWriter(_sendBuffer);
+				encrypted = _crypto.Encrypt(encryptionKey, _sendBuffer.Array, 0, _sendBuffer.WriteIndex);
+			}
+			using (_sendBuffer) {
+				_sendBuffer.Write((ushort)encrypted.Length);
+				_sendBuffer.Write(encrypted);
+				_tcp.Send(recipient, _sendBuffer.Array, 0, _sendBuffer.WriteIndex);
+			}
+		}
+
+		public void SendUdp(IDoubleServerClient recipient, Action<ByteBuffer> payloadWriter) {
 			lock (this) {
 				DoubleServerClient client = (DoubleServerClient)recipient;
 				using (_sendBuffer) {
-					UdpHelper.WriteCrc(_sendBuffer, packetWriter);
+					UdpHelper.WritePrefix(_sendBuffer, client.ConnectionStartTimestamp, payloadWriter);
 					byte[] encrypted = _crypto.Encrypt(client.EncryptionKey, _sendBuffer.Array, 0, _sendBuffer.WriteIndex);
 					_udp.Send(client.UdpEndPoint, encrypted, 0, encrypted.Length);
 				}
@@ -102,12 +117,14 @@ namespace DoubleSocket.Server {
 		private void OnTcpPacketAssembled(Socket sender, byte[] buffer, int offset, int size) {
 			lock (this) {
 				DoubleServerClient client = _tcpClients[sender];
+				_receiveBuffer.Array = buffer;
+				_receiveBuffer.WriteIndex = size + offset;
+				_receiveBuffer.ReadIndex = offset;
+
 				if (client.State == ClientState.TcpAuthenticating) {
-					_receiveBuffer.Array = buffer;
-					_receiveBuffer.WriteIndex = size + offset;
-					_receiveBuffer.ReadIndex = offset;
 					if (_handler.AuthenticateClient(client, _receiveBuffer, out byte[] encryptionKey, out byte errorCode)) {
-						client.TcpAuthenticated(encryptionKey, out ulong udpAuthenticationKey);
+						client.TcpAuthenticated(encryptionKey, _udpAuthenticationKeys.Keys, out ulong udpAuthenticationKey);
+						_udpAuthenticationKeys[udpAuthenticationKey] = client;
 
 						if (++_authenticatedCount == _maxAuthenticatedCount) {
 							_tcp.StopAccepting();
@@ -118,7 +135,11 @@ namespace DoubleSocket.Server {
 							}
 						}
 
-						SendTcp(client, buff => buff.Write(udpAuthenticationKey));
+						SendEncryptedLengthPrefixOnlyTcp(sender, encryptionKey, buff => {
+							buff.Write(client.SequenceIdBound);
+							buff.Write(udpAuthenticationKey);
+							buff.Write(client.ConnectionStartTimestamp);
+						});
 						Task.Delay(UdpAuthenticationTimeout).ContinueWith(task => {
 							lock (this) {
 								if (client.State == ClientState.UdpAuthenticating) {
@@ -127,14 +148,17 @@ namespace DoubleSocket.Server {
 							}
 						});
 					} else {
-						SendTcp(client, buff => buff.Write(errorCode));
+						SendEncryptedLengthPrefixOnlyTcp(sender, encryptionKey, buff => buff.Write(errorCode));
 						Disconnect(client);
 					}
-				} else if (client.State == ClientState.Connected) {
-					_receiveBuffer.Array = _crypto.Decrypt(client.EncryptionKey, buffer, offset, size);
+				} else if (client.State == ClientState.Authenticated) {
+					_receiveBuffer.Array = _crypto.Decrypt(client.EncryptionKey, _receiveBuffer.Array,
+						_receiveBuffer.ReadIndex, _receiveBuffer.BytesLeft);
 					_receiveBuffer.WriteIndex = _receiveBuffer.Array.Length;
 					_receiveBuffer.ReadIndex = 0;
-					_handler.OnTcpReceived(client, _receiveBuffer);
+					if (client.CheckReceiveSequenceId(_receiveBuffer.ReadByte())) {
+						_handler.OnTcpReceived(client, _receiveBuffer);
+					}
 				} else {
 					Disconnect(client); //client sent data while it was UdpAuthenticating
 				}
@@ -156,16 +180,14 @@ namespace DoubleSocket.Server {
 					_receiveBuffer.WriteIndex = _receiveBuffer.Array.Length;
 					_receiveBuffer.ReadIndex = 0;
 
-					if (UdpHelper.CrcCheck(_receiveBuffer)) {
-						_handler.OnUdpReceived(client, _receiveBuffer);
+					if (UdpHelper.PrefixCheck(_receiveBuffer, out ushort packetTimestamp)) {
+						_handler.OnUdpReceived(client, _receiveBuffer, packetTimestamp);
 					}
-				} else if (size == 64) {
-					ulong key = BitConverter.ToUInt64(buffer, 0);
-					client = _tcpClients.Values.FirstOrDefault(c => c.IsUdpAuthenticatingWith(key));
-					if (client != null) {
-						client.InitializeUdp(sender);
+				} else if (size == 8) {
+					if (_udpAuthenticationKeys.TryGetValue(BitConverter.ToUInt64(buffer, 0), out client)) {
+						client.UdpAuthenticated(sender);
 						_udpClients.Add(sender, client);
-						SendTcp(client, buff => buff.Write((byte)0));
+						SendEncryptedLengthPrefixOnlyTcp(client.TcpSocket, client.EncryptionKey, buff => buff.Write((byte)0));
 					}
 				}
 			}
@@ -176,7 +198,7 @@ namespace DoubleSocket.Server {
 		public enum ClientState {
 			TcpAuthenticating,
 			UdpAuthenticating,
-			Connected,
+			Authenticated,
 			Disconnected
 		}
 	}

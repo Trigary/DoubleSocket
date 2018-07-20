@@ -16,6 +16,7 @@ namespace DoubleSocket.Client {
 
 		private readonly ReceiveHandler _receiveHandler;
 		private readonly Socket _socket;
+		private readonly int _receiveBufferArraySize;
 
 		/// <summary>
 		/// Creates a new instance with the specified options.
@@ -23,7 +24,8 @@ namespace DoubleSocket.Client {
 		/// <param name="receiveHandler">The handler of received data.</param>
 		/// <param name="socketBufferSize">The size of the socket's internal send and receive buffers.</param>
 		/// <param name="timeout">The timeout in millis for the socket's functions.</param>
-		public UdpClientSocket(ReceiveHandler receiveHandler, int socketBufferSize, int timeout) {
+		/// <param name="receiveBufferArraySize">The size of the buffer used in the ReceiveHandler.</param>
+		public UdpClientSocket(ReceiveHandler receiveHandler, int socketBufferSize, int timeout, int receiveBufferArraySize) {
 			lock (this) {
 				_receiveHandler = receiveHandler;
 
@@ -33,6 +35,7 @@ namespace DoubleSocket.Client {
 					ReceiveTimeout = timeout,
 					SendTimeout = timeout
 				};
+				_receiveBufferArraySize = receiveBufferArraySize;
 			}
 		}
 
@@ -43,14 +46,13 @@ namespace DoubleSocket.Client {
 		/// </summary>
 		/// <param name="ip">The IP to connect to.</param>
 		/// <param name="port">The port on which to connect.</param>
-		/// <param name="receiveBufferArraySize">The size of the buffer used in the ReceiveHandler.</param>
-		public void Start(string ip, int port, int receiveBufferArraySize) {
+		public void Start(string ip, int port) {
 			lock (this) {
 				_socket.Connect(new IPEndPoint(IPAddress.Parse(ip), port));
 				SocketAsyncEventArgs eventArgs = new SocketAsyncEventArgs();
 				eventArgs.Completed += OnReceived;
 				eventArgs.RemoteEndPoint = new IPEndPoint(IPAddress.Parse(ip), port);
-				eventArgs.SetBuffer(new byte[receiveBufferArraySize], 0, receiveBufferArraySize);
+				eventArgs.SetBuffer(new byte[_receiveBufferArraySize], 0, _receiveBufferArraySize);
 				if (!_socket.ReceiveAsync(eventArgs)) {
 					OnReceived(null, eventArgs);
 				}

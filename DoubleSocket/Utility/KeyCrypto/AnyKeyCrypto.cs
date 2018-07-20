@@ -18,7 +18,7 @@ namespace DoubleSocket.Utility.KeyCrypto {
 			// ReSharper disable once PossibleNullReferenceException
 			_aes.Mode = CipherMode.CBC;
 			_aes.Padding = PaddingMode.PKCS7;
-			_iv = new byte[16];
+			_iv = FixedKeyCrypto.Iv;
 		}
 
 

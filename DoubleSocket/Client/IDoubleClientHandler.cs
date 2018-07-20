@@ -6,10 +6,10 @@ namespace DoubleSocket.Client {
 		void OnConnectionFailure(SocketError error);
 		void OnAuthenticationFailure(byte errorCode);
 
-		void OnSuccessfulConnect();
+		void OnSuccessfulAuthentication();
 
 		void OnTcpReceived(ByteBuffer buffer);
-		void OnUdpReceived(ByteBuffer buffer);
+		void OnUdpReceived(ByteBuffer buffer, ushort packetTimestamp);
 
 		void OnConnectionLost();
 	}

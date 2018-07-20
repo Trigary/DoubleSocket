@@ -4,9 +4,10 @@ using DoubleSocket.Utility.ByteBuffer;
 
 namespace DoubleSocket.Protocol {
 	public static class UdpHelper {
-		public static void WriteCrc(ByteBuffer buffer, Action<ByteBuffer> packetWriter) {
+		public static void WritePrefix(ByteBuffer buffer, long connectionStartTimestamp, Action<ByteBuffer> payloadwriter) {
 			buffer.WriteIndex = 4;
-			packetWriter(buffer);
+			buffer.Write((ushort)(DoubleProtocol.TimeMillis - connectionStartTimestamp));
+			payloadwriter(buffer);
 			uint crc = Crc32.Get(buffer.Array, 4, buffer.WriteIndex);
 			byte[] array = buffer.Array;
 			array[0] = (byte)crc;
@@ -15,8 +16,13 @@ namespace DoubleSocket.Protocol {
 			array[3] = (byte)(crc >> 24);
 		}
 
-		public static bool CrcCheck(ByteBuffer buffer) {
-			return buffer.ReadUInt() == Crc32.Get(buffer.Array, 4, buffer.WriteIndex);
+		public static bool PrefixCheck(ByteBuffer buffer, out ushort packetTimestamp) {
+			if (buffer.ReadUInt() != Crc32.Get(buffer.Array, 4, buffer.WriteIndex)) {
+				packetTimestamp = 0;
+				return false;
+			}
+			packetTimestamp = buffer.ReadUShort();
+			return true;
 		}
 	}
 }
