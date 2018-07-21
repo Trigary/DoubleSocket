@@ -31,8 +31,7 @@ The server needs to be able to provide the encryption key based on the received 
 If the client got denied, then a single encrypted packet containing an 8-bit error code will be sent, then the connection will be closed.
 If the client got accepted, the server sends an 8-bit long sequence id value bound, a 64-bit long UDP authentication key and a 64-bit long connection-start timestamp.
 All three of these are saved internally, linked to the specific client instance.
-Multiple clients must not get the same UDP authentication key and the CRC-32 calculated from the key's last 32 bits mustn't equal the key's first 32 bits.
-This is to allow the distinguishment between a late-arrived UDP authentication and an actual payload.
+Multiple clients must not get the same UDP authentication key.
 If the client got accepted and the count of authenticated client equals the client limit then all non-authenticated (but connected) clients are kicked and new clients are no longer accepted until an authenticated client disconnects.
 
 ### UDP authentication

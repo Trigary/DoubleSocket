@@ -97,6 +97,7 @@ namespace DoubleSocket.Utility.ByteBuffer {
 
 		public void Write(byte[] value, int offset, int count) {
 			Buffer.BlockCopy(value, offset, Array, WriteIndex, count);
+			WriteIndex += count;
 		}
 
 		public void Write(byte[] value) {
@@ -106,39 +107,47 @@ namespace DoubleSocket.Utility.ByteBuffer {
 
 
 		public byte ReadByte() {
-			return Array[ReadIndex];
+			return Array[ReadIndex++];
 		}
 
 		public short ReadShort() {
-			return BitConverter.ToInt16(Array, ReadIndex);
+			ReadIndex += 2;
+			return BitConverter.ToInt16(Array, ReadIndex - 2);
 		}
 
 		public ushort ReadUShort() {
-			return BitConverter.ToUInt16(Array, ReadIndex);
+			ReadIndex += 2;
+			return BitConverter.ToUInt16(Array, ReadIndex - 2);
 		}
 
 		public int ReadInt() {
-			return BitConverter.ToInt32(Array, ReadIndex);
+			ReadIndex += 4;
+			return BitConverter.ToInt32(Array, ReadIndex - 4);
 		}
 
 		public uint ReadUInt() {
-			return BitConverter.ToUInt32(Array, ReadIndex);
+			ReadIndex += 4;
+			return BitConverter.ToUInt32(Array, ReadIndex - 4);
 		}
 
 		public long ReadLong() {
-			return BitConverter.ToInt64(Array, ReadIndex);
+			ReadIndex += 8;
+			return BitConverter.ToInt64(Array, ReadIndex - 8);
 		}
 
 		public ulong ReadULong() {
-			return BitConverter.ToUInt64(Array, ReadIndex);
+			ReadIndex += 8;
+			return BitConverter.ToUInt64(Array, ReadIndex - 8);
 		}
 
 		public float ReadFloat() {
-			return BitConverter.ToSingle(Array, ReadIndex);
+			ReadIndex += 4;
+			return BitConverter.ToSingle(Array, ReadIndex - 4);
 		}
 
 		public double ReadDouble() {
-			return BitConverter.ToSingle(Array, ReadIndex);
+			ReadIndex += 8;
+			return BitConverter.ToSingle(Array, ReadIndex - 8);
 		}
 
 		public string ReadString(int count) {
@@ -152,6 +161,7 @@ namespace DoubleSocket.Utility.ByteBuffer {
 		public byte[] ReadBytes(int count) {
 			byte[] bytes = new byte[count];
 			Buffer.BlockCopy(Array, ReadIndex, bytes, 0, count);
+			ReadIndex += count;
 			return bytes;
 		}
 

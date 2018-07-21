@@ -13,25 +13,25 @@ namespace DoubleSocket.Test {
 	[SuppressMessage("ReSharper", "AccessToModifiedClosure")]
 	[SuppressMessage("ReSharper", "ImplicitlyCapturedClosure")]
 	public class SocketEchoTest {
+		public const int PayloadCount = 1000;
 		public const string Ip = "127.0.0.1";
 		public const int Port = 8888;
-		public const int DataLength = 1000;
 		public const int SocketBufferSize = 3 * DataLength;
 		public const int Timeout = 1000;
-		public const int RunCount = 1000;
+		public const int DataLength = 1000;
 		private readonly Random _random = new Random();
 
 		[Test]
 		public void UdpTest() {
 			object monitor = new object();
 			lock (monitor) {
-				int runCounter = 0;
+				int payloadCounter = 0;
 
 				Console.WriteLine("Starting server");
 				UdpServerSocket server = null;
 				server = new UdpServerSocket((sender, buffer, size) => {
 					lock (monitor) {
-						Console.WriteLine("SR " + size);
+						Console.WriteLine("SRec " + size);
 						server.Send(sender, buffer, 0, size);
 					}
 				}, Port, SocketBufferSize, Timeout, DataLength + 1);
@@ -43,9 +43,9 @@ namespace DoubleSocket.Test {
 				UdpClientSocket client = null;
 				client = new UdpClientSocket((buffer, size) => {
 					lock (monitor) {
-						Console.WriteLine("CR " + size);
+						Console.WriteLine("CRec " + size);
 						AssertArrayContentsEqualInFirstArrayLengthRange(sendBuffer, buffer);
-						if (++runCounter == RunCount) {
+						if (++payloadCounter == PayloadCount) {
 							Monitor.Pulse(monitor);
 						} else {
 							_random.NextBytes(sendBuffer);
@@ -55,9 +55,9 @@ namespace DoubleSocket.Test {
 				}, SocketBufferSize, Timeout, DataLength + 1);
 				client.Start(Ip, Port);
 
-				Console.WriteLine("Client sending data first data");
+				Console.WriteLine("Client sending first data");
 				client.Send(sendBuffer, 0, sendBuffer.Length);
-				Console.WriteLine("Waiting");
+				Console.WriteLine("Main thread waiting");
 				Assert.IsTrue(Monitor.Wait(monitor, 5000), "Test timed out");
 
 				Console.WriteLine("Closing client");
@@ -72,7 +72,7 @@ namespace DoubleSocket.Test {
 			object monitor = new object();
 			lock (monitor) {
 				bool clientMaySend = false;
-				int runCounter = 0;
+				int payloadCounter = 0;
 
 				Console.WriteLine("Starting server");
 				HashSet<Socket> connectedSockets = new HashSet<Socket>();
@@ -80,13 +80,13 @@ namespace DoubleSocket.Test {
 				server = new TcpServerSocket(socket => {
 					lock (monitor) {
 						lock (connectedSockets) {
-							Console.WriteLine("Client connected");
+							Console.WriteLine("Server received client's connection");
 							connectedSockets.Add(socket);
 						}
 					}
 				}, (sender, buffer, size) => {
 					lock (monitor) {
-						Console.WriteLine("SR " + size);
+						Console.WriteLine("SRec " + size);
 						server.Send(sender, buffer, 0, size);
 					}
 				}, socket => {
@@ -94,7 +94,7 @@ namespace DoubleSocket.Test {
 						Console.WriteLine("Server lost connection to client");
 						connectedSockets.Remove(socket);
 					}
-				}, connectedSockets, 10, Port, SocketBufferSize, Timeout, DataLength + 1);
+				}, connectedSockets, 1, Port, SocketBufferSize, Timeout, DataLength + 1);
 
 				byte[] sendBuffer = new byte[DataLength];
 				_random.NextBytes(sendBuffer);
@@ -102,6 +102,7 @@ namespace DoubleSocket.Test {
 				Console.WriteLine("Starting client");
 				TcpClientSocket client = null;
 				client = new TcpClientSocket(() => {
+						Console.WriteLine("Client connected to server");
 						lock (monitor) {
 							if (clientMaySend) {
 								Console.WriteLine("Client not waiting for main thread");
@@ -109,19 +110,18 @@ namespace DoubleSocket.Test {
 								Console.WriteLine("Client waiting for main thread");
 								Assert.IsTrue(Monitor.Wait(monitor, 5000), "Wait for main thread timed out");
 							}
-							Console.WriteLine("Client sending data first data");
+							Console.WriteLine("Client sending first data");
 							client.Send(sendBuffer, 0, sendBuffer.Length);
 						}
 					}, error => {
 						lock (monitor) {
 							Console.WriteLine("Client failed to connect to server: " + error);
 						}
-					},
-					(buffer, size) => {
+					}, (buffer, size) => {
 						lock (monitor) {
-							Console.WriteLine("CR " + size);
+							Console.WriteLine("CRec " + size);
 							AssertArrayContentsEqualInFirstArrayLengthRange(sendBuffer, buffer);
-							if (++runCounter == RunCount) {
+							if (++payloadCounter == PayloadCount) {
 								Monitor.Pulse(monitor);
 							} else {
 								_random.NextBytes(sendBuffer);
@@ -133,7 +133,7 @@ namespace DoubleSocket.Test {
 
 				clientMaySend = true;
 				Monitor.Pulse(monitor);
-				Console.WriteLine("Waiting");
+				Console.WriteLine("Main thread waiting");
 				Assert.IsTrue(Monitor.Wait(monitor, 5000), "Test timed out");
 
 				Console.WriteLine("Closing client");

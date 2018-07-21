@@ -22,6 +22,11 @@ namespace DoubleSocket.Protocol {
 
 		public static void DisconnectAsync(Socket socket, Queue<SocketAsyncEventArgs> eventArgsQueue,
 											EventHandler<SocketAsyncEventArgs> previousHandler) {
+			if (!socket.Connected) {
+				socket.Close();
+				return;
+			}
+
 			SocketAsyncEventArgs eventArgs;
 			if (eventArgsQueue.Count == 0) {
 				eventArgs = new SocketAsyncEventArgs();
@@ -64,6 +69,10 @@ namespace DoubleSocket.Protocol {
 		public void OnTcpReceived(Socket sender, byte[] buffer, int size) {
 			int offset = 0;
 			while (true) {
+				if (size - offset == 0) {
+					return;
+				}
+
 				if (_packetSize == 0) {
 					if (_savedPacketSizeBytes + size - offset >= 2) {
 						if (_savedPacketSizeBytes == 0) {
@@ -77,6 +86,7 @@ namespace DoubleSocket.Protocol {
 
 						if (size - offset >= _packetSize) { //buffer contains a whole packet, no need to copy bytes
 							_assembledPacketHandler(sender, buffer, offset, _packetSize);
+							offset += _packetSize;
 							_packetSize = 0;
 							continue;
 						}
@@ -87,9 +97,10 @@ namespace DoubleSocket.Protocol {
 					}
 				}
 
-				int copySize = _packetSize == 0 ? size - offset : Math.Min(size - offset, _packetSize);
+				int copySize = Math.Min(size - offset, _packetSize);
 				Buffer.BlockCopy(buffer, offset, _packetBuffer, _savedPayloadBytes, copySize);
 				offset += copySize;
+				_savedPayloadBytes += copySize;
 
 				if (_savedPayloadBytes == _packetSize) {
 					_assembledPacketHandler(sender, _packetBuffer, offset, _packetSize);

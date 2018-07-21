@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
 using DoubleSocket.Protocol;
-using DoubleSocket.Utility;
 
 namespace DoubleSocket.Server {
 	public interface IDoubleServerClient {
@@ -40,8 +39,7 @@ namespace DoubleSocket.Server {
 				do {
 					Random.NextBytes(RandomBytes);
 					udpAuthenticationKey = BitConverter.ToUInt64(RandomBytes, 0);
-				} while (usedKeys.Contains(udpAuthenticationKey)
-					|| BitConverter.ToUInt32(RandomBytes, 0) == Crc32.Get(RandomBytes, 4, RandomBytes.Length - 4));
+				} while (usedKeys.Contains(udpAuthenticationKey));
 			}
 			ConnectionStartTimestamp = DoubleProtocol.TimeMillis;
 		}

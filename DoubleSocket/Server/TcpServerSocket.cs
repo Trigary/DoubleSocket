@@ -136,6 +136,7 @@ namespace DoubleSocket.Server {
 				}
 				
 				Buffer.BlockCopy(data, offset, eventArgs.Buffer, eventArgs.Offset, size);
+				eventArgs.SetBuffer(0, size);
 				if (!recipient.SendAsync(eventArgs)) {
 					OnSent(null, eventArgs);
 				}

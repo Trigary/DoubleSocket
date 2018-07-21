@@ -4,13 +4,14 @@ using DoubleSocket.Utility.ByteBuffer;
 namespace DoubleSocket.Client {
 	public interface IDoubleClientHandler {
 		void OnConnectionFailure(SocketError error);
-		void OnAuthenticationFailure(byte errorCode);
+		void OnTcpAuthenticationFailure(byte errorCode);
+		void OnAuthenticationTimeout(DoubleClient.State state);
 
-		void OnSuccessfulAuthentication();
+		void OnFullAuthentication();
 
 		void OnTcpReceived(ByteBuffer buffer);
 		void OnUdpReceived(ByteBuffer buffer, ushort packetTimestamp);
 
-		void OnConnectionLost();
+		void OnConnectionLost(DoubleClient.State state);
 	}
 }

@@ -8,7 +8,7 @@ namespace DoubleSocket.Protocol {
 			buffer.WriteIndex = 4;
 			buffer.Write((ushort)(DoubleProtocol.TimeMillis - connectionStartTimestamp));
 			payloadwriter(buffer);
-			uint crc = Crc32.Get(buffer.Array, 4, buffer.WriteIndex);
+			uint crc = Crc32.Get(buffer.Array, 4, buffer.WriteIndex - 4);
 			byte[] array = buffer.Array;
 			array[0] = (byte)crc;
 			array[1] = (byte)(crc >> 8);
@@ -17,7 +17,7 @@ namespace DoubleSocket.Protocol {
 		}
 
 		public static bool PrefixCheck(ByteBuffer buffer, out ushort packetTimestamp) {
-			if (buffer.ReadUInt() != Crc32.Get(buffer.Array, 4, buffer.WriteIndex)) {
+			if (buffer.BytesLeft <= 6 || buffer.ReadUInt() != Crc32.Get(buffer.Array, buffer.ReadIndex, buffer.BytesLeft)) {
 				packetTimestamp = 0;
 				return false;
 			}

@@ -109,7 +109,7 @@ namespace DoubleSocket.Client {
 					Task.Delay(TcpAuthenticationTimeout).ContinueWith(task => {
 						lock (this) {
 							if (CurrentState == State.TcpAuthenticating) {
-								OnTcpLostConnection();
+								OnAuthenticationTimeout();
 							}
 						}
 					});
@@ -133,7 +133,7 @@ namespace DoubleSocket.Client {
 				if (CurrentState == State.TcpAuthenticating) {
 					if (_receiveBuffer.Array.Length == 1) {
 						Close();
-						_handler.OnAuthenticationFailure(_receiveBuffer.ReadByte());
+						_handler.OnTcpAuthenticationFailure(_receiveBuffer.ReadByte());
 					} else {
 						CurrentState = State.UdpAuthenticating;
 						_sequenceIdBound = _receiveBuffer.ReadByte();
@@ -146,19 +146,19 @@ namespace DoubleSocket.Client {
 								int counter = 0;
 								while (counter++ < UdpAuthenticationPacketSendCount) {
 									_udp.Send(udpAuthenticationKey, 0, udpAuthenticationKey.Length);
-									Monitor.Wait(udpAuthenticationKey, 1000 / UdpAuthenticationPacketFrequency);
+									Monitor.Wait(this, 1000 / UdpAuthenticationPacketFrequency);
 									if (CurrentState != State.UdpAuthenticating) {
 										return;
 									}
 								}
-								OnTcpLostConnection();
+								OnAuthenticationTimeout();
 							}
 						});
 					}
 				} else if (CurrentState == State.UdpAuthenticating) {
 					if (_receiveBuffer.Array.Length == 1 && _receiveBuffer.ReadByte() == 0) {
 						CurrentState = State.Authenticated;
-						_handler.OnSuccessfulAuthentication();
+						_handler.OnFullAuthentication();
 					}
 				} else {
 					if (_receiveBuffer.ReadByte() == _receiveSequenceId) {
@@ -173,9 +173,18 @@ namespace DoubleSocket.Client {
 
 		private void OnTcpLostConnection() {
 			lock (this) {
-				Close();
-				_handler.OnConnectionLost();
+				if (CurrentState != State.Disconnected) {
+					State state = CurrentState;
+					Close();
+					_handler.OnConnectionLost(state);
+				}
 			}
+		}
+
+		private void OnAuthenticationTimeout() {
+			State state = CurrentState;
+			Close();
+			_handler.OnAuthenticationTimeout(state);
 		}
 
 		private void OnUdpReceived(byte[] buffer, int size) {

@@ -101,11 +101,7 @@ namespace DoubleSocket.Client {
 		/// </summary>
 		public void Close() {
 			lock (this) {
-				if (_socket.Connected) {
-					TcpHelper.DisconnectAsync(_socket, _sendEventArgsQueue, OnSent);
-				} else {
-					_socket.Close();
-				}
+				TcpHelper.DisconnectAsync(_socket, _sendEventArgsQueue, OnSent);
 			}
 		}
 
@@ -132,8 +128,9 @@ namespace DoubleSocket.Client {
 				} else {
 					eventArgs = _sendEventArgsQueue.Dequeue();
 				}
-				
+
 				Buffer.BlockCopy(data, offset, eventArgs.Buffer, eventArgs.Offset, size);
+				eventArgs.SetBuffer(0, size);
 				if (!_socket.SendAsync(eventArgs)) {
 					OnSent(null, eventArgs);
 				}

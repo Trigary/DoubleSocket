@@ -9,8 +9,8 @@ using DoubleSocket.Utility.KeyCrypto;
 
 namespace DoubleSocket.Server {
 	public class DoubleServer {
-		public const int TcpAuthenticationTimeout = 2000;
-		public const int UdpAuthenticationTimeout = 2000;
+		public const int TcpAuthenticationTimeout = 5000;
+		public const int UdpAuthenticationTimeout = 5000;
 
 		private readonly IDictionary<Socket, DoubleServerClient> _tcpClients = new Dictionary<Socket, DoubleServerClient>();
 		private readonly IDictionary<EndPoint, DoubleServerClient> _udpClients = new Dictionary<EndPoint, DoubleServerClient>();
@@ -122,7 +122,7 @@ namespace DoubleSocket.Server {
 				_receiveBuffer.ReadIndex = offset;
 
 				if (client.State == ClientState.TcpAuthenticating) {
-					if (_handler.AuthenticateClient(client, _receiveBuffer, out byte[] encryptionKey, out byte errorCode)) {
+					if (_handler.TcpAuthenticateClient(client, _receiveBuffer, out byte[] encryptionKey, out byte errorCode)) {
 						client.TcpAuthenticated(encryptionKey, _udpAuthenticationKeys.Keys, out ulong udpAuthenticationKey);
 						_udpAuthenticationKeys[udpAuthenticationKey] = client;
 
@@ -159,17 +159,17 @@ namespace DoubleSocket.Server {
 					if (client.CheckReceiveSequenceId(_receiveBuffer.ReadByte())) {
 						_handler.OnTcpReceived(client, _receiveBuffer);
 					}
-				} else {
-					Disconnect(client); //client sent data while it was UdpAuthenticating
 				}
 			}
 		}
 
 		private void OnTcpLostConnection(Socket socket) {
 			lock (this) {
-				DoubleServerClient client = _tcpClients[socket];
-				Disconnect(client);
-				_handler.OnLostConnection(client);
+				if (_tcpClients.TryGetValue(socket, out DoubleServerClient client)) {
+					ClientState state = client.State;
+					Disconnect(client);
+					_handler.OnLostConnection(client, state);
+				}
 			}
 		}
 
@@ -177,9 +177,12 @@ namespace DoubleSocket.Server {
 			lock (this) {
 				if (_udpClients.TryGetValue(sender, out DoubleServerClient client)) {
 					_receiveBuffer.Array = _crypto.Decrypt(client.EncryptionKey, buffer, 0, size);
+					if (_receiveBuffer.Array == null) {
+						return;
+					}
+
 					_receiveBuffer.WriteIndex = _receiveBuffer.Array.Length;
 					_receiveBuffer.ReadIndex = 0;
-
 					if (UdpHelper.PrefixCheck(_receiveBuffer, out ushort packetTimestamp)) {
 						_handler.OnUdpReceived(client, _receiveBuffer, packetTimestamp);
 					}
@@ -188,6 +191,7 @@ namespace DoubleSocket.Server {
 						client.UdpAuthenticated(sender);
 						_udpClients.Add(sender, client);
 						SendEncryptedLengthPrefixOnlyTcp(client.TcpSocket, client.EncryptionKey, buff => buff.Write((byte)0));
+						_handler.OnFullAuthentication(client);
 					}
 				}
 			}
