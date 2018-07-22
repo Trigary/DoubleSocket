@@ -1,5 +1,6 @@
 ﻿using System.Net;
 using System.Net.Sockets;
+using DoubleSocket.Protocol;
 
 namespace DoubleSocket.Client {
 	/// <summary>
@@ -16,26 +17,21 @@ namespace DoubleSocket.Client {
 
 		private readonly ReceiveHandler _receiveHandler;
 		private readonly Socket _socket;
-		private readonly int _receiveBufferArraySize;
 
 		/// <summary>
 		/// Creates a new instance with the specified options.
 		/// </summary>
 		/// <param name="receiveHandler">The handler of received data.</param>
-		/// <param name="socketBufferSize">The size of the socket's internal send and receive buffers.</param>
-		/// <param name="timeout">The timeout in millis for the socket's functions.</param>
-		/// <param name="receiveBufferArraySize">The size of the buffer used in the ReceiveHandler.</param>
-		public UdpClientSocket(ReceiveHandler receiveHandler, int socketBufferSize, int timeout, int receiveBufferArraySize) {
+		public UdpClientSocket(ReceiveHandler receiveHandler) {
 			lock (this) {
 				_receiveHandler = receiveHandler;
 
 				_socket = new Socket(SocketType.Dgram, ProtocolType.Udp) {
-					ReceiveBufferSize = socketBufferSize,
-					SendBufferSize = socketBufferSize,
-					ReceiveTimeout = timeout,
-					SendTimeout = timeout
+					ReceiveBufferSize = DoubleProtocol.UdpSocketBufferSize,
+					SendBufferSize = DoubleProtocol.UdpSocketBufferSize,
+					ReceiveTimeout = DoubleProtocol.SocketOperationTimeout,
+					SendTimeout = DoubleProtocol.SocketOperationTimeout
 				};
-				_receiveBufferArraySize = receiveBufferArraySize;
 			}
 		}
 
@@ -52,13 +48,13 @@ namespace DoubleSocket.Client {
 				SocketAsyncEventArgs eventArgs = new SocketAsyncEventArgs();
 				eventArgs.Completed += OnReceived;
 				eventArgs.RemoteEndPoint = new IPEndPoint(IPAddress.Parse(ip), port);
-				eventArgs.SetBuffer(new byte[_receiveBufferArraySize], 0, _receiveBufferArraySize);
+				eventArgs.SetBuffer(new byte[DoubleProtocol.UdpBufferArraySize], 0, DoubleProtocol.UdpBufferArraySize);
 				if (!_socket.ReceiveAsync(eventArgs)) {
 					OnReceived(null, eventArgs);
 				}
 			}
 		}
-
+		
 		/// <summary>
 		/// Closes the socket, therefore no more packets will be received and sending will be impossible.
 		/// </summary>
@@ -70,6 +66,8 @@ namespace DoubleSocket.Client {
 				_socket.Close();
 			}
 		}
+
+
 
 		/// <summary>
 		/// Sends the server the specified data.

@@ -8,6 +8,7 @@ namespace DoubleSocket.Server {
 	public interface IDoubleServerClient {
 		DoubleServer.ClientState State { get; }
 		object ExtraData { get; set; }
+		IPEndPoint Address { get; }
 	}
 
 	public class DoubleServerClient : IDoubleServerClient {
@@ -16,6 +17,7 @@ namespace DoubleSocket.Server {
 
 		public DoubleServer.ClientState State { get; private set; } = DoubleServer.ClientState.TcpAuthenticating;
 		public object ExtraData { get; set; }
+		public IPEndPoint Address => (IPEndPoint)TcpSocket.RemoteEndPoint;
 
 		public Socket TcpSocket { get; }
 		public EndPoint UdpEndPoint { get; private set; }
@@ -34,13 +36,11 @@ namespace DoubleSocket.Server {
 		public void TcpAuthenticated(byte[] encryptionKey, ICollection<ulong> usedKeys, out ulong udpAuthenticationKey) {
 			State = DoubleServer.ClientState.UdpAuthenticating;
 			EncryptionKey = encryptionKey;
-			lock (Random) {
-				SequenceIdBound = (byte)Random.Next(128, 256);
-				do {
-					Random.NextBytes(RandomBytes);
-					udpAuthenticationKey = BitConverter.ToUInt64(RandomBytes, 0);
-				} while (usedKeys.Contains(udpAuthenticationKey));
-			}
+			SequenceIdBound = (byte)Random.Next(128, 256);
+			do {
+				Random.NextBytes(RandomBytes);
+				udpAuthenticationKey = BitConverter.ToUInt64(RandomBytes, 0);
+			} while (usedKeys.Contains(udpAuthenticationKey));
 			ConnectionStartTimestamp = DoubleProtocol.TimeMillis;
 		}
 

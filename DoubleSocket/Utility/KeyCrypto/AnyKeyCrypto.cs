@@ -59,18 +59,14 @@ namespace DoubleSocket.Utility.KeyCrypto {
 		/// <param name="size">The size of the data.</param>
 		/// <returns></returns>
 		public byte[] Decrypt(byte[] encryptionKey, byte[] data, int offset, int size) {
-			try {
-				using (MemoryStream memory = new MemoryStream()) {
-					using (ICryptoTransform decryptor = _aes.CreateDecryptor(encryptionKey, _iv)) {
-						using (CryptoStream crypto = new CryptoStream(memory, decryptor, CryptoStreamMode.Write)) {
-							crypto.Write(data, offset, size);
-							crypto.FlushFinalBlock();
-							return memory.ToArray();
-						}
+			using (MemoryStream memory = new MemoryStream()) {
+				using (ICryptoTransform decryptor = _aes.CreateDecryptor(encryptionKey, _iv)) {
+					using (CryptoStream crypto = new CryptoStream(memory, decryptor, CryptoStreamMode.Write)) {
+						crypto.Write(data, offset, size);
+						crypto.FlushFinalBlock();
+						return memory.ToArray();
 					}
 				}
-			} catch (CryptographicException) {
-				return null;
 			}
 		}
 	}

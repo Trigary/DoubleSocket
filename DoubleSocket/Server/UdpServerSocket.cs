@@ -1,5 +1,6 @@
 ﻿using System.Net;
 using System.Net.Sockets;
+using DoubleSocket.Protocol;
 
 namespace DoubleSocket.Server {
 	/// <summary>
@@ -24,26 +25,22 @@ namespace DoubleSocket.Server {
 		/// </summary>
 		/// <param name="receiveHandler">The handler of received data.</param>
 		/// <param name="port">The port the server should listen on.</param>
-		/// <param name="socketBufferSize">The size of the socket's internal send and receive buffers.</param>
-		/// <param name="timeout">The timeout in millis for the socket's functions.</param>
-		/// <param name="receiveBufferArraySize">The size of the buffer used in the ReceiveHandler.</param>
-		public UdpServerSocket(ReceiveHandler receiveHandler, int port, int socketBufferSize,
-								int timeout, int receiveBufferArraySize) {
+		public UdpServerSocket(ReceiveHandler receiveHandler, int port) {
 			lock (this) {
 				_receiveHandler = receiveHandler;
 				_port = port;
 
 				_socket = new Socket(SocketType.Dgram, ProtocolType.Udp) {
-					ReceiveBufferSize = socketBufferSize,
-					SendBufferSize = socketBufferSize,
-					ReceiveTimeout = timeout,
-					SendTimeout = timeout
+					ReceiveBufferSize = DoubleProtocol.UdpSocketBufferSize,
+					SendBufferSize = DoubleProtocol.UdpSocketBufferSize,
+					ReceiveTimeout = DoubleProtocol.SocketOperationTimeout,
+					SendTimeout = DoubleProtocol.SocketOperationTimeout
 				};
 
 				_socket.Bind(new IPEndPoint(IPAddress.Any, port));
 				SocketAsyncEventArgs eventArgs = new SocketAsyncEventArgs();
 				eventArgs.Completed += OnReceived;
-				eventArgs.SetBuffer(new byte[receiveBufferArraySize], 0, receiveBufferArraySize);
+				eventArgs.SetBuffer(new byte[DoubleProtocol.UdpBufferArraySize], 0, DoubleProtocol.UdpBufferArraySize);
 				eventArgs.RemoteEndPoint = new IPEndPoint(IPAddress.Any, _port);
 				if (!_socket.ReceiveFromAsync(eventArgs)) {
 					OnReceived(null, eventArgs);
@@ -62,6 +59,8 @@ namespace DoubleSocket.Server {
 				_socket.Close();
 			}
 		}
+
+
 
 		/// <summary>
 		/// Sends the specified endpoint the specified data.

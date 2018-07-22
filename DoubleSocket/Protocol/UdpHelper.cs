@@ -6,7 +6,7 @@ namespace DoubleSocket.Protocol {
 	public static class UdpHelper {
 		public static void WritePrefix(ByteBuffer buffer, long connectionStartTimestamp, Action<ByteBuffer> payloadwriter) {
 			buffer.WriteIndex = 4;
-			buffer.Write((ushort)(DoubleProtocol.TimeMillis - connectionStartTimestamp));
+			buffer.Write(DoubleProtocol.PacketTimestamp(connectionStartTimestamp));
 			payloadwriter(buffer);
 			uint crc = Crc32.Get(buffer.Array, 4, buffer.WriteIndex - 4);
 			byte[] array = buffer.Array;

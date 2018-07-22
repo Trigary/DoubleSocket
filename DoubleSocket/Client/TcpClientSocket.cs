@@ -44,7 +44,6 @@ namespace DoubleSocket.Client {
 		private readonly ReceiveHandler _receiveHandler;
 		private readonly ConnectionLostHandler _connectionLostHandler;
 		private readonly Socket _socket;
-		private readonly int _bufferArraySize;
 
 		/// <summary>
 		/// Creates a new instance with the specified options.
@@ -53,12 +52,8 @@ namespace DoubleSocket.Client {
 		/// <param name="failedConnectHandler">The handler of the failed connection.</param>
 		/// <param name="receiveHandler">The handler of received data.</param>
 		/// <param name="connectionLostHandler">The handler of the disconnect.</param>
-		/// <param name="socketBufferSize">The size of the socket's internal send and receive buffers.</param>
-		/// <param name="timeout">The timeout in millis for the socket's functions.</param>
-		/// <param name="bufferArraySize">The size of the buffer used to send and receive data.</param>
 		public TcpClientSocket(SuccessfulConnectHandler successfulConnectHandler, FailedConnectHandler failedConnectHandler,
-								ReceiveHandler receiveHandler, ConnectionLostHandler connectionLostHandler,
-								int socketBufferSize, int timeout, int bufferArraySize) {
+								ReceiveHandler receiveHandler, ConnectionLostHandler connectionLostHandler) {
 			lock (this) {
 				_successfulConnectHandler = successfulConnectHandler;
 				_failedConnectHandler = failedConnectHandler;
@@ -66,14 +61,13 @@ namespace DoubleSocket.Client {
 				_connectionLostHandler = connectionLostHandler;
 
 				_socket = new Socket(SocketType.Stream, ProtocolType.Tcp) {
-					ReceiveBufferSize = socketBufferSize,
-					SendBufferSize = socketBufferSize,
-					ReceiveTimeout = timeout,
-					SendTimeout = timeout,
+					ReceiveBufferSize = DoubleProtocol.TcpSocketBufferSize,
+					SendBufferSize = DoubleProtocol.TcpSocketBufferSize,
+					ReceiveTimeout = DoubleProtocol.SocketOperationTimeout,
+					SendTimeout = DoubleProtocol.SocketOperationTimeout,
 					NoDelay = true
 				};
 				_socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, true);
-				_bufferArraySize = bufferArraySize;
 			}
 		}
 
@@ -89,7 +83,7 @@ namespace DoubleSocket.Client {
 				SocketAsyncEventArgs eventArgs = new SocketAsyncEventArgs();
 				eventArgs.Completed += OnConnected;
 				eventArgs.RemoteEndPoint = new IPEndPoint(IPAddress.Parse(ip), port);
-				eventArgs.SetBuffer(new byte[_bufferArraySize], 0, _bufferArraySize);
+				eventArgs.SetBuffer(new byte[DoubleProtocol.TcpBufferArraySize], 0, DoubleProtocol.TcpBufferArraySize);
 				if (!_socket.ConnectAsync(eventArgs)) {
 					OnConnected(null, eventArgs);
 				}
@@ -112,6 +106,8 @@ namespace DoubleSocket.Client {
 			_socket.Close();
 		}
 
+
+
 		/// <summary>
 		/// Sends the server the specified data.
 		/// </summary>
@@ -124,7 +120,7 @@ namespace DoubleSocket.Client {
 				if (_sendEventArgsQueue.Count == 0) {
 					eventArgs = new SocketAsyncEventArgs();
 					eventArgs.Completed += OnSent;
-					eventArgs.SetBuffer(new byte[_bufferArraySize], 0, _bufferArraySize);
+					eventArgs.SetBuffer(new byte[DoubleProtocol.TcpBufferArraySize], 0, DoubleProtocol.TcpBufferArraySize);
 				} else {
 					eventArgs = _sendEventArgsQueue.Dequeue();
 				}

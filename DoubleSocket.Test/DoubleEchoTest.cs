@@ -13,24 +13,22 @@ namespace DoubleSocket.Test {
 		public const int PayloadCount = 1000;
 		public const string Ip = "127.0.0.1";
 		public const int Port = 8888;
-		public const int SocketBufferSize = 3 * DataLength;
-		public const int Timeout = 1000;
-		public const int DataLength = 1000;
+		public const int DataSize = 1000;
 		private static readonly Random Random = new Random();
 
-		[Test]
+		[Test, Timeout(2000)]
 		public void Test() {
 			byte[] encryptionKey = new byte[16];
 			Random.NextBytes(encryptionKey);
 
 			Console.WriteLine("Starting server");
 			DoubleServerHandler serverHandler = new DoubleServerHandler();
-			DoubleServer server = new DoubleServer(serverHandler, 1, 1, Port, SocketBufferSize, Timeout, DataLength + 100);
+			DoubleServer server = new DoubleServer(serverHandler, 1, 1, Port);
 			serverHandler.Server = server;
 
 			Console.WriteLine("Starting client");
 			DoubleClientHandler clientHandler = new DoubleClientHandler();
-			DoubleClient client = new DoubleClient(clientHandler, encryptionKey, encryptionKey, Ip, Port, SocketBufferSize, Timeout, DataLength + 100);
+			DoubleClient client = new DoubleClient(clientHandler, encryptionKey, encryptionKey, Ip, Port);
 			clientHandler.Client = client;
 			client.Start();
 
@@ -38,7 +36,6 @@ namespace DoubleSocket.Test {
 				clientHandler.MaySend = true;
 				Monitor.Pulse(client);
 				Console.WriteLine("Main thread waiting");
-				//Assert.IsTrue(Monitor.Wait(client, 5000), "Test timed out");
 				Monitor.Wait(client);
 			}
 
@@ -57,9 +54,8 @@ namespace DoubleSocket.Test {
 
 		[SuppressMessage("ReSharper", "ParameterOnlyUsedForPreconditionCheck.Local")]
 		private static void AssertFirstArrayContainsSecond(byte[] first, int start, byte[] second) {
-			const string message = "First array doesn't contain the second";
 			for (int i = 0; i < second.Length; i++) {
-				Assert.IsTrue(first[i + start] == second[i], message);
+				Assert.IsTrue(first[i + start] == second[i], "First array doesn't contain the second");
 			}
 		}
 
@@ -122,7 +118,7 @@ namespace DoubleSocket.Test {
 				}
 
 				Console.WriteLine("Client sending first TCP data");
-				_previousPayload = new byte[DataLength];
+				_previousPayload = new byte[DataSize];
 				Random.NextBytes(_previousPayload);
 				Client.SendTcp(buff => buff.Write(_previousPayload));
 			}

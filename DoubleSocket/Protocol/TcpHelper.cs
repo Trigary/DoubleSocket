@@ -13,8 +13,8 @@ namespace DoubleSocket.Protocol {
 		private int _savedPacketSizeBytes;
 		private int _savedPayloadBytes;
 
-		public TcpHelper(int receiveBufferSize, AssembledPacketHandler assembledPacketHandler) {
-			_packetBuffer = new byte[receiveBufferSize];
+		public TcpHelper(AssembledPacketHandler assembledPacketHandler) {
+			_packetBuffer = new byte[DoubleProtocol.TcpBufferArraySize];
 			_assembledPacketHandler = assembledPacketHandler;
 		}
 
@@ -103,12 +103,10 @@ namespace DoubleSocket.Protocol {
 				_savedPayloadBytes += copySize;
 
 				if (_savedPayloadBytes == _packetSize) {
-					_assembledPacketHandler(sender, _packetBuffer, offset, _packetSize);
+					_assembledPacketHandler(sender, _packetBuffer, 0, _packetSize);
+					_packetSize = 0;
 					_savedPayloadBytes = 0;
-
-					if (offset < size) {
-						continue;
-					}
+					continue;
 				}
 				break;
 			}

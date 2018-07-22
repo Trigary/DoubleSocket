@@ -8,9 +8,9 @@ using DoubleSocket.Utility.KeyCrypto;
 
 namespace DoubleSocket.Client {
 	public class DoubleClient {
-		public const int TcpAuthenticationTimeout = 5000;
+		public const int TcpAuthenticationTimeout = 3000;
 		public const int UdpAuthenticationPacketFrequency = 30;
-		public const int UdpAuthenticationPacketSendCount = 5 * UdpAuthenticationPacketFrequency;
+		public const int UdpAuthenticationPacketSendCount = 3 * UdpAuthenticationPacketFrequency;
 
 		public State CurrentState { get; private set; } = State.Disconnected;
 
@@ -28,15 +28,14 @@ namespace DoubleSocket.Client {
 		private byte _sendSequenceId;
 		private byte _receiveSequenceId;
 
-		public DoubleClient(IDoubleClientHandler handler, byte[] encryptionKey, byte[] authenticationData,
-							string ip, int port, int socketBufferSize, int timeout, int bufferArraySize) {
+		public DoubleClient(IDoubleClientHandler handler, byte[] encryptionKey, byte[] authenticationData, string ip, int port) {
 			lock (this) {
 				_handler = handler;
 				_crypto = new FixedKeyCrypto(encryptionKey);
-				TcpHelper tcpHelper = new TcpHelper(bufferArraySize, OnTcpPacketAssembled);
+				TcpHelper tcpHelper = new TcpHelper(OnTcpPacketAssembled);
 				_tcp = new TcpClientSocket(OnTcpConnected, OnTcpConnectionFailed, ((buffer, size) =>
-					tcpHelper.OnTcpReceived(null, buffer, size)), OnTcpLostConnection, socketBufferSize, timeout, bufferArraySize);
-				_udp = new UdpClientSocket(OnUdpReceived, socketBufferSize, timeout, bufferArraySize);
+					tcpHelper.OnTcpReceived(null, buffer, size)), OnTcpLostConnection);
+				_udp = new UdpClientSocket(OnUdpReceived);
 
 				_authenticationData = authenticationData;
 				_ip = ip;
