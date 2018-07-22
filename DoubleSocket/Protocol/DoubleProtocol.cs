@@ -30,21 +30,16 @@ namespace DoubleSocket.Protocol {
 
 
 		public static bool IsPacketNewest(ref ushort previousNewestPacketTimestamp, ushort packetTimestamp) {
-			if ((packetTimestamp > previousNewestPacketTimestamp
-					&& !(IsInFirstQuarter(previousNewestPacketTimestamp) && IsInLastQuarter(packetTimestamp)))
-				|| (IsInFirstQuarter(packetTimestamp) && IsInLastQuarter(previousNewestPacketTimestamp))) {
+			if (IsPacketTimestampInThreshold(packetTimestamp, previousNewestPacketTimestamp)
+				|| IsPacketTimestampInThreshold(packetTimestamp + ushort.MaxValue, previousNewestPacketTimestamp)) {
 				previousNewestPacketTimestamp = packetTimestamp;
 				return true;
 			}
 			return false;
 		}
 
-		private static bool IsInFirstQuarter(ushort packetTimestamp) {
-			return packetTimestamp < ushort.MaxValue / 4;
-		}
-
-		private static bool IsInLastQuarter(ushort packetTimestamp) {
-			return packetTimestamp > (ushort.MaxValue / 4) * 3;
+		private static bool IsPacketTimestampInThreshold(int newTimestamp, int previousTimestamp) {
+			return newTimestamp > previousTimestamp && newTimestamp - (ushort.MaxValue / 10) < previousTimestamp;
 		}
 	}
 }
