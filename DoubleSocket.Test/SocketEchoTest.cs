@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
+using System.Net;
 using System.Net.Sockets;
 using System.Threading;
 using DoubleSocket.Client;
@@ -14,9 +15,9 @@ namespace DoubleSocket.Test {
 	[SuppressMessage("ReSharper", "ImplicitlyCapturedClosure")]
 	public class SocketEchoTest {
 		public const int PayloadCount = 1000;
-		public const string Ip = "127.0.0.1";
 		public const int Port = 8888;
 		public const int DataSize = 1000;
+		public static readonly IPAddress Ip = IPAddress.Loopback;
 		private readonly Random _random = new Random();
 
 		[Test, Timeout(1000)]
@@ -100,8 +101,8 @@ namespace DoubleSocket.Test {
 				Console.WriteLine("Starting client");
 				TcpClientSocket client = null;
 				client = new TcpClientSocket(() => {
-						Console.WriteLine("Client connected to server");
 						lock (monitor) {
+							Console.WriteLine("Client connected to server");
 							if (clientMaySend) {
 								Console.WriteLine("Client not waiting for main thread");
 							} else {

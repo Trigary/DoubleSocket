@@ -54,21 +54,19 @@ namespace DoubleSocket.Client {
 		/// <param name="connectionLostHandler">The handler of the disconnect.</param>
 		public TcpClientSocket(SuccessfulConnectHandler successfulConnectHandler, FailedConnectHandler failedConnectHandler,
 								ReceiveHandler receiveHandler, ConnectionLostHandler connectionLostHandler) {
-			lock (this) {
-				_successfulConnectHandler = successfulConnectHandler;
-				_failedConnectHandler = failedConnectHandler;
-				_receiveHandler = receiveHandler;
-				_connectionLostHandler = connectionLostHandler;
+			_successfulConnectHandler = successfulConnectHandler;
+			_failedConnectHandler = failedConnectHandler;
+			_receiveHandler = receiveHandler;
+			_connectionLostHandler = connectionLostHandler;
 
-				_socket = new Socket(SocketType.Stream, ProtocolType.Tcp) {
-					ReceiveBufferSize = DoubleProtocol.TcpSocketBufferSize,
-					SendBufferSize = DoubleProtocol.TcpSocketBufferSize,
-					ReceiveTimeout = DoubleProtocol.SocketOperationTimeout,
-					SendTimeout = DoubleProtocol.SocketOperationTimeout,
-					NoDelay = true
-				};
-				_socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, true);
-			}
+			_socket = new Socket(SocketType.Stream, ProtocolType.Tcp) {
+				ReceiveBufferSize = DoubleProtocol.TcpSocketBufferSize,
+				SendBufferSize = DoubleProtocol.TcpSocketBufferSize,
+				ReceiveTimeout = DoubleProtocol.SocketOperationTimeout,
+				SendTimeout = DoubleProtocol.SocketOperationTimeout,
+				NoDelay = true
+			};
+			_socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, true);
 		}
 
 
@@ -78,15 +76,13 @@ namespace DoubleSocket.Client {
 		/// </summary>
 		/// <param name="ip">The IP to connect to.</param>
 		/// <param name="port">The port on which to connect.</param>
-		public void Start(string ip, int port) {
-			lock (this) {
-				SocketAsyncEventArgs eventArgs = new SocketAsyncEventArgs();
-				eventArgs.Completed += OnConnected;
-				eventArgs.RemoteEndPoint = new IPEndPoint(IPAddress.Parse(ip), port);
-				eventArgs.SetBuffer(new byte[DoubleProtocol.TcpBufferArraySize], 0, DoubleProtocol.TcpBufferArraySize);
-				if (!_socket.ConnectAsync(eventArgs)) {
-					OnConnected(null, eventArgs);
-				}
+		public void Start(IPAddress ip, int port) {
+			SocketAsyncEventArgs eventArgs = new SocketAsyncEventArgs();
+			eventArgs.Completed += OnConnected;
+			eventArgs.RemoteEndPoint = new IPEndPoint(ip, port);
+			eventArgs.SetBuffer(new byte[DoubleProtocol.TcpBufferArraySize], 0, DoubleProtocol.TcpBufferArraySize);
+			if (!_socket.ConnectAsync(eventArgs)) {
+				OnConnected(null, eventArgs);
 			}
 		}
 
@@ -94,16 +90,24 @@ namespace DoubleSocket.Client {
 		/// Closes the connection.
 		/// </summary>
 		public void Close() {
-			lock (this) {
+			lock (_sendEventArgsQueue) {
 				TcpHelper.DisconnectAsync(_socket, _sendEventArgsQueue, OnSent);
 			}
 		}
 
-		private void ForcedClose() {
-			if (_socket.Connected) {
-				_socket.Shutdown(SocketShutdown.Both);
+		private bool ForcedClose() {
+			try {
+				if (_socket.Connected) {
+					_socket.Shutdown(SocketShutdown.Both);
+					_socket.Close();
+					return true;
+				} else {
+					_socket.Close();
+					return false;
+				}
+			} catch (Exception e) when (e is ObjectDisposedException || e is InvalidOperationException) {
+				return false;
 			}
-			_socket.Close();
 		}
 
 
@@ -115,8 +119,8 @@ namespace DoubleSocket.Client {
 		/// <param name="offset">The offset of the data in the buffer.</param>
 		/// <param name="size">The size of the data.</param>
 		public void Send(byte[] data, int offset, int size) {
-			lock (this) {
-				SocketAsyncEventArgs eventArgs;
+			SocketAsyncEventArgs eventArgs;
+			lock (_sendEventArgsQueue) {
 				if (_sendEventArgsQueue.Count == 0) {
 					eventArgs = new SocketAsyncEventArgs();
 					eventArgs.Completed += OnSent;
@@ -124,12 +128,20 @@ namespace DoubleSocket.Client {
 				} else {
 					eventArgs = _sendEventArgsQueue.Dequeue();
 				}
+			}
 
-				Buffer.BlockCopy(data, offset, eventArgs.Buffer, eventArgs.Offset, size);
-				eventArgs.SetBuffer(0, size);
-				if (!_socket.SendAsync(eventArgs)) {
-					OnSent(null, eventArgs);
-				}
+			Buffer.BlockCopy(data, offset, eventArgs.Buffer, eventArgs.Offset, size);
+			eventArgs.SetBuffer(0, size);
+
+			bool isAsync;
+			try {
+				isAsync = _socket.SendAsync(eventArgs);
+			} catch (Exception e) when (e is ObjectDisposedException || e is InvalidOperationException) {
+				return;
+			}
+
+			if (!isAsync) {
+				OnSent(null, eventArgs);
 			}
 		}
 
@@ -158,31 +170,26 @@ namespace DoubleSocket.Client {
 					throw new SocketException((int)eventArgs.SocketError);
 			}
 
-			lock (this) {
-				_successfulConnectHandler();
-				eventArgs.Completed -= OnConnected;
-				eventArgs.Completed += OnReceived;
-				if (!_socket.ReceiveAsync(eventArgs)) {
-					OnReceived(null, eventArgs);
-				}
+			_successfulConnectHandler();
+			eventArgs.Completed -= OnConnected;
+			eventArgs.Completed += OnReceived;
+			if (!_socket.ReceiveAsync(eventArgs)) {
+				OnReceived(null, eventArgs);
 			}
 		}
 
 		private void OnReceived(object sender, SocketAsyncEventArgs eventArgs) {
-			lock (this) {
-				while (true) {
-					if (TcpHelper.ShouldHandleError(eventArgs, out bool isRemoteShutdown)) {
-						if (isRemoteShutdown) {
-							ForcedClose();
-							_connectionLostHandler();
-						}
-						return;
+			while (true) {
+				if (TcpHelper.ShouldHandleError(eventArgs, out bool isRemoteShutdown)) {
+					if (isRemoteShutdown && ForcedClose()) {
+						_connectionLostHandler();
 					}
+					return;
+				}
 
-					_receiveHandler(eventArgs.Buffer, eventArgs.BytesTransferred);
-					if (_socket.ReceiveAsync(eventArgs)) {
-						break;
-					}
+				_receiveHandler(eventArgs.Buffer, eventArgs.BytesTransferred);
+				if (_socket.ReceiveAsync(eventArgs)) {
+					break;
 				}
 			}
 		}
@@ -192,7 +199,7 @@ namespace DoubleSocket.Client {
 				return;
 			}
 
-			lock (this) {
+			lock (_sendEventArgsQueue) {
 				if (_sendEventArgsQueue.Count < MaxCachedSendEventArgs) {
 					_sendEventArgsQueue.Enqueue(eventArgs);
 				}

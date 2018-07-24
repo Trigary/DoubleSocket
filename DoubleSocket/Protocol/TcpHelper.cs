@@ -43,8 +43,11 @@ namespace DoubleSocket.Protocol {
 			eventArgs.DisconnectReuseSocket = false;
 			socket.LingerState = new LingerOption(true, 1);
 			
-			socket.Shutdown(SocketShutdown.Both);
-			socket.DisconnectAsync(eventArgs);
+			try {
+				socket.Shutdown(SocketShutdown.Both);
+				socket.DisconnectAsync(eventArgs);
+			} catch (Exception e) when (e is ObjectDisposedException || e is InvalidOperationException) {
+			}
 		}
 
 		public static bool ShouldHandleError(SocketAsyncEventArgs eventArgs, out bool isRemoteShutdown) {

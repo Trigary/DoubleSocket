@@ -7,6 +7,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DoubleSocket", "DoubleSocke
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DoubleSocket.Test", "DoubleSocket.Test\DoubleSocket.Test.csproj", "{FA26F0F8-0CC7-43B8-A8EC-0A168A8DA851}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DoubleSocket.Example.Client", "DoubleSocket.Example.Client\DoubleSocket.Example.Client.csproj", "{7B319F0E-06CC-4705-8FFB-422DA0BD7002}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DoubleSocket.Example.Server", "DoubleSocket.Example.Server\DoubleSocket.Example.Server.csproj", "{841EF83F-31DF-4E18-BB3D-B914726ABFCF}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -21,6 +25,14 @@ Global
 		{FA26F0F8-0CC7-43B8-A8EC-0A168A8DA851}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{FA26F0F8-0CC7-43B8-A8EC-0A168A8DA851}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{FA26F0F8-0CC7-43B8-A8EC-0A168A8DA851}.Release|Any CPU.Build.0 = Release|Any CPU
+		{7B319F0E-06CC-4705-8FFB-422DA0BD7002}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7B319F0E-06CC-4705-8FFB-422DA0BD7002}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7B319F0E-06CC-4705-8FFB-422DA0BD7002}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7B319F0E-06CC-4705-8FFB-422DA0BD7002}.Release|Any CPU.Build.0 = Release|Any CPU
+		{841EF83F-31DF-4E18-BB3D-B914726ABFCF}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{841EF83F-31DF-4E18-BB3D-B914726ABFCF}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{841EF83F-31DF-4E18-BB3D-B914726ABFCF}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{841EF83F-31DF-4E18-BB3D-B914726ABFCF}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

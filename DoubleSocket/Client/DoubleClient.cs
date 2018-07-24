@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Net;
 using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
@@ -20,7 +21,7 @@ namespace DoubleSocket.Client {
 		private readonly FixedKeyCrypto _crypto;
 		private readonly TcpClientSocket _tcp;
 		private readonly UdpClientSocket _udp;
-		private readonly string _ip;
+		private readonly IPAddress _ip;
 		private readonly int _port;
 		private byte[] _authenticationData;
 		private byte _sequenceIdBound;
@@ -28,7 +29,7 @@ namespace DoubleSocket.Client {
 		private byte _sendSequenceId;
 		private byte _receiveSequenceId;
 
-		public DoubleClient(IDoubleClientHandler handler, byte[] encryptionKey, byte[] authenticationData, string ip, int port) {
+		public DoubleClient(IDoubleClientHandler handler, byte[] encryptionKey, byte[] authenticationData, IPAddress ip, int port) {
 			lock (this) {
 				_handler = handler;
 				_crypto = new FixedKeyCrypto(encryptionKey);

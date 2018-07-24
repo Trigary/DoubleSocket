@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Diagnostics.CodeAnalysis;
+using System.Net;
 using System.Net.Sockets;
 using System.Threading;
 using DoubleSocket.Client;
@@ -11,9 +12,9 @@ namespace DoubleSocket.Test {
 	[TestFixture]
 	public class DoubleEchoTest {
 		public const int PayloadCount = 1000;
-		public const string Ip = "127.0.0.1";
 		public const int Port = 8888;
 		public const int DataSize = 1000;
+		public static readonly IPAddress Ip = IPAddress.Loopback;
 		private static readonly Random Random = new Random();
 
 		[Test, Timeout(2000)]

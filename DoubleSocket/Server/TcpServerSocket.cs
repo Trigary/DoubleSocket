@@ -35,11 +35,6 @@ namespace DoubleSocket.Server {
 		/// </summary>
 		public const int MaxCachedSendEventArgs = 100;
 
-		/// <summary>
-		/// Whether the server is currently accepting new connections. True by default.
-		/// </summary>
-		public bool Accepting { get; private set; }
-
 		private readonly Queue<SocketAsyncEventArgs> _sendEventArgsQueue = new Queue<SocketAsyncEventArgs>();
 		private readonly Queue<SocketAsyncEventArgs> _receiveEventArgsQueue = new Queue<SocketAsyncEventArgs>();
 		private readonly NewConnectionHandler _newConnectionHandler;
@@ -47,6 +42,7 @@ namespace DoubleSocket.Server {
 		private readonly ConnectionLostHandler _connectionLostHandler;
 		private readonly ICollection<Socket> _connectedSockets;
 		private readonly Socket _socket;
+		private bool _accepting;
 		private bool _stoppedAccepting = true;
 
 		/// <summary>
@@ -61,25 +57,23 @@ namespace DoubleSocket.Server {
 		public TcpServerSocket(NewConnectionHandler newConnectionHandler, ReceiveHandler receiveHandler,
 								ConnectionLostHandler connectionLostHandler, ICollection<Socket> connectedSockets,
 								int maxPendingConnections, int port) {
-			lock (this) {
-				_newConnectionHandler = newConnectionHandler;
-				_receiveHandler = receiveHandler;
-				_connectionLostHandler = connectionLostHandler;
-				_connectedSockets = connectedSockets;
+			_newConnectionHandler = newConnectionHandler;
+			_receiveHandler = receiveHandler;
+			_connectionLostHandler = connectionLostHandler;
+			_connectedSockets = connectedSockets;
 
-				_socket = new Socket(SocketType.Stream, ProtocolType.Tcp) {
-					ReceiveBufferSize = DoubleProtocol.TcpSocketBufferSize,
-					SendBufferSize = DoubleProtocol.TcpSocketBufferSize,
-					ReceiveTimeout = DoubleProtocol.SocketOperationTimeout,
-					SendTimeout = DoubleProtocol.SocketOperationTimeout,
-					NoDelay = true
-				};
-				_socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, true);
+			_socket = new Socket(SocketType.Stream, ProtocolType.Tcp) {
+				ReceiveBufferSize = DoubleProtocol.TcpSocketBufferSize,
+				SendBufferSize = DoubleProtocol.TcpSocketBufferSize,
+				ReceiveTimeout = DoubleProtocol.SocketOperationTimeout,
+				SendTimeout = DoubleProtocol.SocketOperationTimeout,
+				NoDelay = true
+			};
+			_socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, true);
 
-				_socket.Bind(new IPEndPoint(IPAddress.Any, port));
-				_socket.Listen(maxPendingConnections);
-				StartAccepting();
-			}
+			_socket.Bind(new IPEndPoint(IPAddress.Any, port));
+			_socket.Listen(maxPendingConnections);
+			StartAccepting();
 		}
 
 
@@ -88,8 +82,8 @@ namespace DoubleSocket.Server {
 		/// Start accepting new connections again.
 		/// </summary>
 		public void StartAccepting() {
-			lock (this) {
-				Accepting = true;
+			lock (_socket) {
+				_accepting = true;
 				if (_stoppedAccepting) {
 					_stoppedAccepting = false;
 					SocketAsyncEventArgs eventArgs = new SocketAsyncEventArgs();
@@ -105,8 +99,8 @@ namespace DoubleSocket.Server {
 		/// Stop accepting new connections.
 		/// </summary>
 		public void StopAccepting() {
-			lock (this) {
-				Accepting = false;
+			lock (_socket) {
+				_accepting = false;
 			}
 		}
 
@@ -116,33 +110,38 @@ namespace DoubleSocket.Server {
 		/// Stops the server from accepting new connections and closes all previously created connections.
 		/// </summary>
 		public void Close() {
-			lock (this) {
-				Accepting = false;
-				_socket.Close();
+			lock (_socket) {
+				_accepting = false;
+			}
+			_socket.Close();
+			lock (_connectedSockets) {
 				foreach (Socket socket in _connectedSockets) {
-					TcpHelper.DisconnectAsync(socket, _sendEventArgsQueue, OnSent);
+					lock (_sendEventArgsQueue) {
+						TcpHelper.DisconnectAsync(socket, _sendEventArgsQueue, OnSent);
+					}
 				}
 			}
 		}
-
-
 
 		/// <summary>
 		/// Kicks the speicifed socket from the server.
 		/// </summary>
 		/// <param name="socket">The socket to kick.</param>
 		public void Disconnect(Socket socket) {
-			lock (this) {
+			lock (_sendEventArgsQueue) {
 				TcpHelper.DisconnectAsync(socket, _sendEventArgsQueue, OnSent);
 			}
 		}
 
-		private void ForcedDisconnect(Socket socket) {
-			socket.Shutdown(SocketShutdown.Both);
-			socket.Close();
+		private bool ForcedDisconnect(Socket socket) {
+			try {
+				socket.Shutdown(SocketShutdown.Both);
+				socket.Close();
+				return true;
+			} catch (Exception e) when (e is ObjectDisposedException || e is InvalidOperationException) {
+				return false;
+			}
 		}
-
-
 
 		/// <summary>
 		/// Sends the specified connection the specified data.
@@ -152,8 +151,8 @@ namespace DoubleSocket.Server {
 		/// <param name="offset">The offset of the data in the buffer.</param>
 		/// <param name="size">The size of the data.</param>
 		public void Send(Socket recipient, byte[] data, int offset, int size) {
-			lock (this) {
-				SocketAsyncEventArgs eventArgs;
+			SocketAsyncEventArgs eventArgs;
+			lock (_sendEventArgsQueue) {
 				if (_sendEventArgsQueue.Count == 0) {
 					eventArgs = new SocketAsyncEventArgs();
 					eventArgs.Completed += OnSent;
@@ -161,61 +160,63 @@ namespace DoubleSocket.Server {
 				} else {
 					eventArgs = _sendEventArgsQueue.Dequeue();
 				}
-				
-				Buffer.BlockCopy(data, offset, eventArgs.Buffer, eventArgs.Offset, size);
-				eventArgs.SetBuffer(0, size);
-				if (!recipient.SendAsync(eventArgs)) {
-					OnSent(null, eventArgs);
-				}
+			}
+
+			Buffer.BlockCopy(data, offset, eventArgs.Buffer, eventArgs.Offset, size);
+			eventArgs.SetBuffer(0, size);
+
+			bool isAsync;
+			try {
+				isAsync = recipient.SendAsync(eventArgs);
+			} catch (Exception e) when (e is ObjectDisposedException || e is InvalidOperationException) {
+				return;
+			}
+
+			if (!isAsync) {
+				OnSent(null, eventArgs);
 			}
 		}
 
-
-
 		private void OnAccepted(object sender, SocketAsyncEventArgs eventArgs) {
-			lock (this) {
-				while (true) {
-					if (eventArgs.SocketError != SocketError.Success) {
-						if (eventArgs.SocketError == SocketError.OperationAborted) {
-							return;
-						}
-						throw new SocketException((int)eventArgs.SocketError);
+			while (true) {
+				if (eventArgs.SocketError != SocketError.Success) {
+					if (eventArgs.SocketError == SocketError.OperationAborted) {
+						return;
 					}
+					throw new SocketException((int)eventArgs.SocketError);
+				}
 
-					Socket newSocket = eventArgs.AcceptSocket;
-					eventArgs.AcceptSocket = null;
-
-					if (!Accepting) {
+				Socket newSocket = eventArgs.AcceptSocket;
+				eventArgs.AcceptSocket = null;
+				lock (_socket) {
+					if (!_accepting) {
 						// ReSharper disable once PossibleNullReferenceException
 						newSocket.Shutdown(SocketShutdown.Both);
 						newSocket.Disconnect(false);
 						_stoppedAccepting = true;
 						return;
 					}
-					
-					_newConnectionHandler(newSocket);
-					if (Accepting) {
-						StartReceiving(newSocket);
-						if (_socket.AcceptAsync(eventArgs)) {
-							break;
-						}
-					} else {
-						_stoppedAccepting = true;
-						return;
-					}
+				}
+
+				_newConnectionHandler(newSocket);
+				StartReceiving(newSocket);
+				if (_socket.AcceptAsync(eventArgs)) {
+					break;
 				}
 			}
 		}
 
 		private void StartReceiving(Socket socket) {
 			SocketAsyncEventArgs eventArgs;
-			if (_receiveEventArgsQueue.Count == 0) {
-				eventArgs = new SocketAsyncEventArgs();
-				eventArgs.SetBuffer(new byte[DoubleProtocol.TcpBufferArraySize], 0, DoubleProtocol.TcpBufferArraySize);
-				eventArgs.Completed += OnReceived;
-				eventArgs.UserToken = new UserToken();
-			} else {
-				eventArgs = _receiveEventArgsQueue.Dequeue();
+			lock (_receiveEventArgsQueue) {
+				if (_receiveEventArgsQueue.Count == 0) {
+					eventArgs = new SocketAsyncEventArgs();
+					eventArgs.SetBuffer(new byte[DoubleProtocol.TcpBufferArraySize], 0, DoubleProtocol.TcpBufferArraySize);
+					eventArgs.Completed += OnReceived;
+					eventArgs.UserToken = new UserToken();
+				} else {
+					eventArgs = _receiveEventArgsQueue.Dequeue();
+				}
 			}
 
 			((UserToken)eventArgs.UserToken).Initialize(socket);
@@ -225,44 +226,48 @@ namespace DoubleSocket.Server {
 		}
 
 		private void OnReceived(object sender, SocketAsyncEventArgs eventArgs) {
-			lock (this) {
-				while (true) {
-					if (TcpHelper.ShouldHandleError(eventArgs, out bool isRemoteShutdown)) {
-						if (isRemoteShutdown) {
-							UserToken userToken = (UserToken)eventArgs.UserToken;
-							ForcedDisconnect(userToken.Socket);
+			while (true) {
+				if (TcpHelper.ShouldHandleError(eventArgs, out bool isRemoteShutdown)) {
+					if (isRemoteShutdown) {
+						UserToken userToken = (UserToken)eventArgs.UserToken;
+						if (!ForcedDisconnect(userToken.Socket)) {
+							return;
+						}
+
+						lock (_connectedSockets) {
 							_connectionLostHandler(userToken.Socket);
-							userToken.Deinitialize();
+						}
+
+						userToken.Deinitialize();
+						lock (_receiveEventArgsQueue) {
 							_receiveEventArgsQueue.Enqueue(eventArgs);
 						}
-						return;
 					}
+					return;
+				}
 
-					UserToken token = (UserToken)eventArgs.UserToken;
-					if (token.ShouldHandle()) {
-						_receiveHandler(token.Socket, eventArgs.Buffer, eventArgs.BytesTransferred);
-					}
+				UserToken token = (UserToken)eventArgs.UserToken;
+				if (token.ShouldHandle()) {
+					_receiveHandler(token.Socket, eventArgs.Buffer, eventArgs.BytesTransferred);
+				}
 
-					if (token.Socket.ReceiveAsync(eventArgs)) {
-						break;
-					}
+				if (token.Socket.ReceiveAsync(eventArgs)) {
+					break;
 				}
 			}
 		}
 
 		private void OnSent(object sender, SocketAsyncEventArgs eventArgs) {
-			lock (this) {
-				if (TcpHelper.ShouldHandleError(eventArgs, out _)) {
-					return;
-				}
+			if (TcpHelper.ShouldHandleError(eventArgs, out _)) {
+				return;
+			}
 
+			lock (_sendEventArgsQueue) {
 				if (_sendEventArgsQueue.Count < MaxCachedSendEventArgs) {
 					_sendEventArgsQueue.Enqueue(eventArgs);
 				}
 			}
 		}
-
-
 
 		private class UserToken {
 			public Socket Socket { get; private set; }
