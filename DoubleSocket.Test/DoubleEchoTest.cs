@@ -9,6 +9,9 @@ using DoubleSocket.Utility.ByteBuffer;
 using NUnit.Framework;
 
 namespace DoubleSocket.Test {
+	/// <summary>
+	/// Tests the DoubleClient and the DoubleServer over both TCP and UDP.
+	/// </summary>
 	[TestFixture]
 	public class DoubleEchoTest {
 		public const int PayloadCount = 1000;

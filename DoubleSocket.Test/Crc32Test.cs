@@ -3,6 +3,9 @@ using DoubleSocket.Utility;
 using NUnit.Framework;
 
 namespace DoubleSocket.Test {
+	/// <summary>
+	/// Tests the CRC-32 algorithm.
+	/// </summary>
 	[TestFixture]
 	public class Crc32Test {
 		private const string First = "H";

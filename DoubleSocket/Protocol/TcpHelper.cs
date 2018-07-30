@@ -3,23 +3,44 @@ using System.Collections.Generic;
 using System.Net.Sockets;
 
 namespace DoubleSocket.Protocol {
+	/// <summary>
+	/// A utility class which help the disconnecting, error handling and handles the packet reassembly.
+	/// </summary>
 	public class TcpHelper {
+		/// <summary>
+		/// Fired when a packet was reassembled.
+		/// </summary>
+		/// <param name="sender">The socket which was specified as the sender of the packet
+		/// or null, if none was specified.</param>
+		/// <param name="buffer">The buffer containing the assembled packet.</param>
+		/// <param name="offset">The offset of the buffer.</param>
+		/// <param name="size">The size of the packet.</param>
 		public delegate void AssembledPacketHandler(Socket sender, byte[] buffer, int offset, int size);
 
 		private readonly byte[] _packetSizeBytes = new byte[2];
-		private readonly byte[] _packetBuffer;
+		private readonly byte[] _packetBuffer = new byte[DoubleProtocol.TcpBufferArraySize];
 		private readonly AssembledPacketHandler _assembledPacketHandler;
 		private ushort _packetSize;
 		private int _savedPacketSizeBytes;
 		private int _savedPayloadBytes;
 
+		/// <summary>
+		/// Creates a new instance with the specified handler. Each TCP connection should have its own instance.
+		/// </summary>
+		/// <param name="assembledPacketHandler">The handler of reassembled packets.</param>
 		public TcpHelper(AssembledPacketHandler assembledPacketHandler) {
-			_packetBuffer = new byte[DoubleProtocol.TcpBufferArraySize];
 			_assembledPacketHandler = assembledPacketHandler;
 		}
 
 
 
+		/// <summary>
+		/// Disconnects the speicifed socket asynchronously.
+		/// </summary>
+		/// <param name="socket">The socekt to disconnect.</param>
+		/// <param name="eventArgsQueue">A queue which may contain SocketAsyncEventArgs
+		/// which can be used for the disconnect operation.</param>
+		/// <param name="previousHandler">The previous handler of the SocketAsyncEventArgs found in the queue.</param>
 		public static void DisconnectAsync(Socket socket, Queue<SocketAsyncEventArgs> eventArgsQueue,
 											EventHandler<SocketAsyncEventArgs> previousHandler) {
 			if (!socket.Connected) {
@@ -50,6 +71,13 @@ namespace DoubleSocket.Protocol {
 			}
 		}
 
+		/// <summary>
+		/// Determines whether there is an error and whether it should be handled.
+		/// Throws an exception for errors which are not expected to happen.
+		/// </summary>
+		/// <param name="eventArgs">The SocketEventArgs containing the information.</param>
+		/// <param name="isRemoteShutdown">Whether the remote socket is being shut down or the local one.</param>
+		/// <returns>Whether the error should be handled.</returns>
 		public static bool ShouldHandleError(SocketAsyncEventArgs eventArgs, out bool isRemoteShutdown) {
 			switch (eventArgs.SocketError) {
 				case SocketError.Success:
@@ -69,6 +97,12 @@ namespace DoubleSocket.Protocol {
 
 
 
+		/// <summary>
+		/// Handles a possibly fragment TCP packet and tries to reassemble it.
+		/// </summary>
+		/// <param name="sender">The sender of the packet which should be passed to the AssembledPacketHandler.</param>
+		/// <param name="buffer">The buffer containing the packet contents.</param>
+		/// <param name="size">The size of the received data.</param>
 		public void OnTcpReceived(Socket sender, byte[] buffer, int size) {
 			int offset = 0;
 			while (true) {

@@ -8,15 +8,35 @@ using DoubleSocket.Utility.ByteBuffer;
 using DoubleSocket.Utility.KeyCrypto;
 
 namespace DoubleSocket.Client {
+	/// <summary>
+	/// A client which has a TCP and an UDP socket. It has multiple authentication phases to make the TCP and the UDP packets
+	/// sychronized on the server side as well. It sends the packets in an encrypted form, makes sure that the received packets
+	/// are reassembled and are valid. It locks on itself (the current instance) for thread safety reason,
+	/// which can be used to achieve even greater thread safety.
+	/// </summary>
 	public class DoubleClient {
+		/// <summary>
+		/// The timeout for the TCP authenticating state.
+		/// </summary>
 		public const int TcpAuthenticationTimeout = 3000;
+
+		/// <summary>
+		/// The count of packets which should be sent each second while in the UDP authenticating state.
+		/// </summary>
 		public const int UdpAuthenticationPacketFrequency = 30;
+
+		/// <summary>
+		/// After how many packets should the UDP authenticating state time out.
+		/// </summary>
 		public const int UdpAuthenticationPacketSendCount = 3 * UdpAuthenticationPacketFrequency;
 
+		/// <summary>
+		/// The current state of the client.
+		/// </summary>
 		public State CurrentState { get; private set; } = State.Disconnected;
 
 		private readonly MutableByteBuffer _receiveBuffer = new MutableByteBuffer();
-		private readonly ResettingByteBuffer _sendBuffer = new ResettingByteBuffer(ushort.MaxValue);
+		private readonly ResettingByteBuffer _sendBuffer = new ResettingByteBuffer(DoubleProtocol.SendBufferArraySize);
 		private readonly IDoubleClientHandler _handler;
 		private readonly FixedKeyCrypto _crypto;
 		private readonly TcpClientSocket _tcp;
@@ -29,6 +49,14 @@ namespace DoubleSocket.Client {
 		private byte _sendSequenceId;
 		private byte _receiveSequenceId;
 
+		/// <summary>
+		/// Create a new instance of the client with the specified options.
+		/// </summary>
+		/// <param name="handler">The handler of the events.</param>
+		/// <param name="encryptionKey">The key which should be used to encrypt the packets.</param>
+		/// <param name="authenticationData">The data based on which the server can authenticate this client.</param>
+		/// <param name="ip">The ip of the server.</param>
+		/// <param name="port">The port of the server.</param>
 		public DoubleClient(IDoubleClientHandler handler, byte[] encryptionKey, byte[] authenticationData, IPAddress ip, int port) {
 			lock (this) {
 				_handler = handler;
@@ -46,6 +74,9 @@ namespace DoubleSocket.Client {
 
 
 
+		/// <summary>
+		/// Starts the client, making it connect to the server.
+		/// </summary>
 		public void Start() {
 			lock (this) {
 				CurrentState = State.TcpAuthenticating;
@@ -53,6 +84,9 @@ namespace DoubleSocket.Client {
 			}
 		}
 
+		/// <summary>
+		/// Closes the client, making it disconnect and dispose of its resources.
+		/// </summary>
 		public void Close() {
 			lock (this) {
 				CurrentState = State.Disconnected;
@@ -64,6 +98,10 @@ namespace DoubleSocket.Client {
 
 
 		
+		/// <summary>
+		/// Sends the specified payload over TCP.
+		/// </summary>
+		/// <param name="payloadWriter">The action which writes the payload to a buffer.</param>
 		public void SendTcp(Action<ByteBuffer> payloadWriter) {
 			lock (this) {
 				byte[] encrypted;
@@ -83,6 +121,10 @@ namespace DoubleSocket.Client {
 			}
 		}
 
+		/// <summary>
+		/// Sends the specified payload over UDP.
+		/// </summary>
+		/// <param name="payloadWriter">The action which writes the payload to a buffer.</param>
 		public void SendUdp(Action<ByteBuffer> payloadWriter) {
 			lock (this) {
 				using (_sendBuffer) {
@@ -201,6 +243,9 @@ namespace DoubleSocket.Client {
 
 
 
+		/// <summary>
+		/// The possible states of the client.
+		/// </summary>
 		public enum State {
 			Disconnected,
 			TcpAuthenticating,

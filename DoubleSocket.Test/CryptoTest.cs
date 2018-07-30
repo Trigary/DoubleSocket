@@ -3,6 +3,9 @@ using DoubleSocket.Utility.KeyCrypto;
 using NUnit.Framework;
 
 namespace DoubleSocket.Test {
+	/// <summary>
+	/// Tests the encryption, decryption using both the FixedKeyCrypto and AnyKeyCrypto classes.
+	/// </summary>
 	[TestFixture]
 	public class CryptoTest {
 		public const int KeyLength = 16;

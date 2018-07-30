@@ -4,6 +4,9 @@ using DoubleSocket.Protocol;
 using NUnit.Framework;
 
 namespace DoubleSocket.Test {
+	/// <summary>
+	/// Tests the packet reassembly algorithm.
+	/// </summary>
 	[TestFixture]
 	public class TcpPacketReassemblyTest {
 		public const int PayloadCount = 100;

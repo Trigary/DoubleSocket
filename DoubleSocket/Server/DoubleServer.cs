@@ -9,15 +9,28 @@ using DoubleSocket.Utility.ByteBuffer;
 using DoubleSocket.Utility.KeyCrypto;
 
 namespace DoubleSocket.Server {
+	/// <summary>
+	/// A server which has a TCP and an UDP socket. It has multiple authentication phases to make the TCP and the UDP packets
+	/// sychronized on this (server) side as well. It sends the packets in an encrypted form, makes sure that the received packets
+	/// are reassembled and are valid. It locks on itself (the current instance) for thread safety reason,
+	/// which can be used to achieve even greater thread safety.
+	/// </summary>
 	public class DoubleServer {
+		/// <summary>
+		/// The timeout for the client's TCP authenticating state.
+		/// </summary>
 		public const int TcpAuthenticationTimeout = 3000;
+
+		/// <summary>
+		/// The timeout for the client's UDP authenticating state.
+		/// </summary>
 		public const int UdpAuthenticationTimeout = 3000;
 
 		private readonly IDictionary<Socket, DoubleServerClient> _tcpClients = new Dictionary<Socket, DoubleServerClient>();
 		private readonly IDictionary<EndPoint, DoubleServerClient> _udpClients = new Dictionary<EndPoint, DoubleServerClient>();
 		private readonly IDictionary<ulong, DoubleServerClient> _udpAuthenticationKeys = new Dictionary<ulong, DoubleServerClient>();
 		private readonly MutableByteBuffer _receiveBuffer = new MutableByteBuffer();
-		private readonly ResettingByteBuffer _sendBuffer = new ResettingByteBuffer(ushort.MaxValue);
+		private readonly ResettingByteBuffer _sendBuffer = new ResettingByteBuffer(DoubleProtocol.SendBufferArraySize);
 		private readonly AnyKeyCrypto _crypto = new AnyKeyCrypto();
 		private readonly IDoubleServerHandler _handler;
 		private readonly int _maxAuthenticatedCount;
@@ -25,6 +38,13 @@ namespace DoubleSocket.Server {
 		private readonly UdpServerSocket _udp;
 		private int _authenticatedCount;
 
+		/// <summary>
+		/// Create a new instance of the client with the specified options.
+		/// </summary>
+		/// <param name="handler">The handler of the events.</param>
+		/// <param name="maxAuthenticatedCount">The max. count of connected authenticated clients.</param>
+		/// <param name="maxPendingConnections">The max. count of socket level pending connections.</param>
+		/// <param name="port">The port on which the server should listen.</param>
 		public DoubleServer(IDoubleServerHandler handler, int maxAuthenticatedCount, int maxPendingConnections, int port) {
 			lock (this) {
 				_handler = handler;
@@ -38,6 +58,9 @@ namespace DoubleSocket.Server {
 
 
 
+		/// <summary>
+		/// Closes the server, making it kick all clients and dispose of its resources.
+		/// </summary>
 		public void Close() {
 			lock (this) {
 				_tcp.Close();
@@ -46,6 +69,10 @@ namespace DoubleSocket.Server {
 			}
 		}
 
+		/// <summary>
+		/// Kicks a specific client.
+		/// </summary>
+		/// <param name="client">The client in question.</param>
 		public void Disconnect(IDoubleServerClient client) {
 			lock (this) {
 				DoubleServerClient impl = (DoubleServerClient)client;
@@ -64,6 +91,11 @@ namespace DoubleSocket.Server {
 
 
 
+		/// <summary>
+		/// Sends the specified payload over TCP to the specified client.
+		/// </summary>
+		/// <param name="recipient">The client in question.</param>
+		/// <param name="payloadWriter">The action which writes the payload to a buffer.</param>
 		public void SendTcp(IDoubleServerClient recipient, Action<ByteBuffer> payloadWriter) {
 			lock (this) {
 				DoubleServerClient client = (DoubleServerClient)recipient;
@@ -87,6 +119,11 @@ namespace DoubleSocket.Server {
 			}
 		}
 
+		/// <summary>
+		/// Sends the specified payload over UDP to the specified client.
+		/// </summary>
+		/// <param name="recipient">The client in question.</param>
+		/// <param name="payloadWriter">The action which writes the payload to a buffer.</param>
 		public void SendUdp(IDoubleServerClient recipient, Action<ByteBuffer> payloadWriter) {
 			lock (this) {
 				DoubleServerClient client = (DoubleServerClient)recipient;
@@ -198,6 +235,9 @@ namespace DoubleSocket.Server {
 
 
 
+		/// <summary>
+		/// The possible states of a client.
+		/// </summary>
 		public enum ClientState {
 			TcpAuthenticating,
 			UdpAuthenticating,

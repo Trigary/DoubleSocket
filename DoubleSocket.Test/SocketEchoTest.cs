@@ -9,6 +9,9 @@ using DoubleSocket.Server;
 using NUnit.Framework;
 
 namespace DoubleSocket.Test {
+	/// <summary>
+	/// Tests the UDP and TCP socket wrappers.
+	/// </summary>
 	[TestFixture]
 	[SuppressMessage("ReSharper", "PossibleNullReferenceException")]
 	[SuppressMessage("ReSharper", "AccessToModifiedClosure")]
