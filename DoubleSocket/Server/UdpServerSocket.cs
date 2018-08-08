@@ -37,11 +37,11 @@ namespace DoubleSocket.Server {
 				SendTimeout = DoubleProtocol.SocketOperationTimeout
 			};
 
-			_socket.Bind(new IPEndPoint(IPAddress.Any, port));
+			_socket.Bind(new IPEndPoint(IPAddress.IPv6Any, port));
 			SocketAsyncEventArgs eventArgs = new SocketAsyncEventArgs();
 			eventArgs.Completed += OnReceived;
 			eventArgs.SetBuffer(new byte[DoubleProtocol.UdpBufferArraySize], 0, DoubleProtocol.UdpBufferArraySize);
-			eventArgs.RemoteEndPoint = new IPEndPoint(IPAddress.Any, _port);
+			eventArgs.RemoteEndPoint = new IPEndPoint(IPAddress.IPv6Any, _port);
 			if (!_socket.ReceiveFromAsync(eventArgs)) {
 				OnReceived(null, eventArgs);
 			}
@@ -78,14 +78,15 @@ namespace DoubleSocket.Server {
 		private void OnReceived(object sender, SocketAsyncEventArgs eventArgs) {
 			while (true) {
 				if (eventArgs.SocketError != SocketError.Success) {
-					if (eventArgs.SocketError == SocketError.OperationAborted) {
+					if (eventArgs.SocketError == SocketError.OperationAborted
+						|| eventArgs.SocketError == SocketError.Shutdown) {
 						return;
 					}
 					throw new SocketException((int)eventArgs.SocketError);
 				}
 
 				_receiveHandler(eventArgs.RemoteEndPoint, eventArgs.Buffer, eventArgs.BytesTransferred);
-				eventArgs.RemoteEndPoint = new IPEndPoint(IPAddress.Any, _port);
+				eventArgs.RemoteEndPoint = new IPEndPoint(IPAddress.IPv6Any, _port);
 				if (_socket.ReceiveFromAsync(eventArgs)) {
 					break;
 				}

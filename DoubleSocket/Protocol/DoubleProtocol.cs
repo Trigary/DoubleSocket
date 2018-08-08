@@ -41,6 +41,13 @@ namespace DoubleSocket.Protocol {
 
 
 		/// <summary>
+		/// Determines whether the current CLR is Mono or not.
+		/// </summary>
+		public static bool IsMonoClr { get; } = Type.GetType("Mono.Runtime") != null;
+
+
+
+		/// <summary>
 		/// The current time since the epoch in milliseconds.
 		/// </summary>
 		public static long TimeMillis => DateTimeOffset.Now.ToUnixTimeMilliseconds();

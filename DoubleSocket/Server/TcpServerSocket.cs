@@ -71,7 +71,7 @@ namespace DoubleSocket.Server {
 			};
 			_socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, true);
 
-			_socket.Bind(new IPEndPoint(IPAddress.Any, port));
+			_socket.Bind(new IPEndPoint(IPAddress.IPv6Any, port));
 			_socket.Listen(maxPendingConnections);
 			StartAccepting();
 		}
@@ -180,7 +180,8 @@ namespace DoubleSocket.Server {
 		private void OnAccepted(object sender, SocketAsyncEventArgs eventArgs) {
 			while (true) {
 				if (eventArgs.SocketError != SocketError.Success) {
-					if (eventArgs.SocketError == SocketError.OperationAborted) {
+					if (eventArgs.SocketError == SocketError.OperationAborted
+						|| eventArgs.SocketError == SocketError.Shutdown) {
 						return;
 					}
 					throw new SocketException((int)eventArgs.SocketError);
@@ -275,14 +276,15 @@ namespace DoubleSocket.Server {
 
 			public void Initialize(Socket socket) {
 				Socket = socket;
-				_hasSkipped = false;
+				_hasSkipped = DoubleProtocol.IsMonoClr;
+				//The first receive event fires for an empty buffer when not using Mono
 			}
 
 			public void Deinitialize() {
 				Socket = null;
 			}
 
-			public bool ShouldHandle() { //The first receive event fires for an empty buffer
+			public bool ShouldHandle() {
 				if (_hasSkipped) {
 					return true;
 				}

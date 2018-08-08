@@ -152,6 +152,7 @@ namespace DoubleSocket.Client {
 				case SocketError.Success:
 					break;
 				case SocketError.OperationAborted:
+				case SocketError.Shutdown:
 					return;
 				case SocketError.ConnectionRefused:
 				case SocketError.HostDown:

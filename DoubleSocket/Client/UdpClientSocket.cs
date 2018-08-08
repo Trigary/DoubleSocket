@@ -82,7 +82,8 @@ namespace DoubleSocket.Client {
 		private void OnReceived(object sender, SocketAsyncEventArgs eventArgs) {
 			while (true) {
 				if (eventArgs.SocketError != SocketError.Success) {
-					if (eventArgs.SocketError == SocketError.OperationAborted) {
+					if (eventArgs.SocketError == SocketError.OperationAborted
+						|| eventArgs.SocketError == SocketError.Shutdown) {
 						return;
 					}
 					throw new SocketException((int)eventArgs.SocketError);

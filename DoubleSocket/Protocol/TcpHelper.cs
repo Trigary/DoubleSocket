@@ -63,7 +63,7 @@ namespace DoubleSocket.Protocol {
 			};
 			eventArgs.DisconnectReuseSocket = false;
 			socket.LingerState = new LingerOption(true, 1);
-			
+
 			try {
 				socket.Shutdown(SocketShutdown.Both);
 				socket.DisconnectAsync(eventArgs);
@@ -84,6 +84,7 @@ namespace DoubleSocket.Protocol {
 					isRemoteShutdown = eventArgs.BytesTransferred == 0;
 					return isRemoteShutdown;
 				case SocketError.OperationAborted:
+				case SocketError.Shutdown:
 					isRemoteShutdown = false;
 					return true;
 				case SocketError.ConnectionReset:
