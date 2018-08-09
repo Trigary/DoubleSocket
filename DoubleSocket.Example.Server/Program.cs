@@ -42,7 +42,7 @@ namespace DoubleSocket.Example.Server {
 			_colors.Enqueue(Color.Blue.ToArgb());
 
 			_server = new DoubleServer(this, MaxPlayerCount, MaxPlayerCount, port);
-			
+
 			_senderThread = new Thread(() => {
 				try {
 					while (true) {
@@ -82,7 +82,7 @@ namespace DoubleSocket.Example.Server {
 			return true;
 		}
 
-		public void OnFullAuthentication(IDoubleServerClient client) {
+		public Action<ByteBuffer> OnFullAuthentication(IDoubleServerClient client) {
 			byte newId;
 			do {
 				newId = _idCounter++;
@@ -107,6 +107,7 @@ namespace DoubleSocket.Example.Server {
 					buffer.Write(player.Color);
 				}
 			});
+			return null;
 		}
 
 

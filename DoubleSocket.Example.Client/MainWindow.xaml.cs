@@ -88,7 +88,7 @@ namespace DoubleSocket.Example.Client {
 			}
 
 			foreach (Player player in _players.Values) {
-				player.LoopOverCells((x, y) => { _cellMap.Set(x, y, CellMap.DefaultBrush); });
+				player.LoopOverCells((x, y) => _cellMap.Set(x, y, CellMap.DefaultBrush));
 			}
 
 			while (buffer.ReadIndex < buffer.WriteIndex) {
@@ -159,7 +159,7 @@ namespace DoubleSocket.Example.Client {
 
 
 
-		public void OnFullAuthentication() {
+		public void OnFullAuthentication(ByteBuffer buffer) {
 			Dispatcher.InvokeAsync(() => {
 				StatusText.Text = "Connected";
 				DisconnectButton.IsEnabled = true;

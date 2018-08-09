@@ -32,7 +32,7 @@ namespace DoubleSocket.Server {
 	public class DoubleServerClient : IDoubleServerClient {
 		private static readonly Random Random = new Random();
 		private static readonly byte[] RandomBytes = new byte[8];
-		
+
 		/// <summary>
 		/// The current state of the client.
 		/// </summary>

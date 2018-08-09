@@ -28,7 +28,9 @@ namespace DoubleSocket.Client {
 		/// <summary>
 		/// Called when the client's UDP channel also got authenticated after its TCP channel.
 		/// </summary>
-		void OnFullAuthentication();
+		/// <param name="buffer">The buffer which holds the payload sent by the server in the final
+		/// authentication confirmation packet. The buffer may be empty.</param>
+		void OnFullAuthentication(ByteBuffer buffer);
 
 		/// <summary>
 		/// Called when the client received data over the TCP channel.

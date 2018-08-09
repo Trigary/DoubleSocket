@@ -1,4 +1,5 @@
-﻿using DoubleSocket.Utility.ByteBuffer;
+﻿using System;
+using DoubleSocket.Utility.ByteBuffer;
 
 namespace DoubleSocket.Server {
 	/// <summary>
@@ -16,12 +17,14 @@ namespace DoubleSocket.Server {
 		/// It is ignored if the authentication is successful.</param>
 		/// <returns>Whether the authentication was successful.</returns>
 		bool TcpAuthenticateClient(IDoubleServerClient client, ByteBuffer buffer, out byte[] encryptionKey, out byte errorCode);
-		
+
 		/// <summary>
 		/// Called when the client's UDP channel also got authenticated after its TCP channel.
 		/// </summary>
 		/// <param name="client">The client in question.</param>
-		void OnFullAuthentication(IDoubleServerClient client);
+		/// <returns>The action which writes the payload which should be included in the final authentication confirmation
+		/// packet sent to the client to a buffer or null if no extra information should be sent in the packet.</returns>
+		Action<ByteBuffer> OnFullAuthentication(IDoubleServerClient client);
 
 		/// <summary>
 		/// Called when the server received data over the TCP channel from the client.

@@ -23,7 +23,7 @@ namespace DoubleSocket.Test {
 			int payloadSize = _sendBuffer.Length - 2;
 			_sendBuffer[0] = (byte)payloadSize;
 			_sendBuffer[1] = (byte)(payloadSize >> 8);
-			
+
 			_helper = new TcpHelper((sender, buffer, offset, size) => {
 				int i;
 				for (i = 0; i < _sentPayload.Length; i++) {
@@ -38,7 +38,7 @@ namespace DoubleSocket.Test {
 			_random.NextBytes(_sentPayload);
 			Buffer.BlockCopy(_sentPayload, 0, _sendBuffer, 2, _sentPayload.Length);
 		}
-		
+
 		private void Send(byte[] buffer, int offset, int count) {
 			if (offset == 0) {
 				_helper.OnTcpReceived(null, buffer, count);
@@ -48,7 +48,7 @@ namespace DoubleSocket.Test {
 			}
 		}
 
-		
+
 
 		[Test, Repeat(PayloadCount)]
 		public void SendAllOnceTest() {

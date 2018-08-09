@@ -226,8 +226,11 @@ namespace DoubleSocket.Server {
 					if (_udpAuthenticationKeys.TryGetValue(BitConverter.ToUInt64(buffer, 0), out client)) {
 						client.UdpAuthenticated(sender);
 						_udpClients.Add(sender, client);
-						SendEncryptedLengthPrefixOnlyTcp(client.TcpSocket, client.EncryptionKey, buff => buff.Write((byte)0));
-						_handler.OnFullAuthentication(client);
+						Action<ByteBuffer> payloadWriter = _handler.OnFullAuthentication(client);
+						SendEncryptedLengthPrefixOnlyTcp(client.TcpSocket, client.EncryptionKey, buff => {
+							buff.Write((byte)0);
+							payloadWriter?.Invoke(buff);
+						});
 					}
 				}
 			}

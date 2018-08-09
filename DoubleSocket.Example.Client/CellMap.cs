@@ -8,7 +8,7 @@ namespace DoubleSocket.Example.Client {
 		public const int Dimension = 16;
 		public const int Scale = 100;
 		public static readonly Color DefaultColor = Color.White;
-		public static readonly Brush DefaultBrush = Brushes.White;
+		public static readonly Brush DefaultBrush = new SolidBrush(DefaultColor);
 
 		private readonly Bitmap _bitmap = new Bitmap(Dimension * Scale, Dimension * Scale);
 		private readonly Graphics _graphics;
@@ -19,10 +19,6 @@ namespace DoubleSocket.Example.Client {
 		}
 
 
-
-		public Color Get(int x, int y) {
-			return _bitmap.GetPixel(x * Scale, y * Scale);
-		}
 
 		public void Set(int x, int y, Brush color) {
 			_graphics.FillRectangle(color, x * Scale, y * Scale, Scale, Scale);

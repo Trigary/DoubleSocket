@@ -133,6 +133,7 @@ namespace DoubleSocket.Server {
 			}
 		}
 
+		// ReSharper disable once MemberCanBeMadeStatic.Local
 		private bool ForcedDisconnect(Socket socket) {
 			try {
 				socket.Shutdown(SocketShutdown.Both);

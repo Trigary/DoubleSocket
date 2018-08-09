@@ -29,7 +29,7 @@ namespace DoubleSocket.Test {
 			Assert.AreNotEqual(Crc32.Get(first, 0, first.Length), Crc32.Get(second, 0, second.Length));
 			Assert.AreNotEqual(Crc32.Get(first, 0, first.Length), Crc32.Get(third, 0, third.Length));
 			Assert.AreNotEqual(Crc32.Get(second, 0, second.Length), Crc32.Get(third, 0, third.Length));
-			
+
 			Assert.AreNotEqual(Crc32.Get(second, 0, second.Length), Crc32.Get(second, 0, first.Length));
 			Assert.AreNotEqual(Crc32.Get(third, 0, third.Length), Crc32.Get(third, 0, second.Length));
 		}

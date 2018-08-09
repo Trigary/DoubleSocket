@@ -3,7 +3,7 @@
 namespace DoubleSocket.Example.Client {
 	public class Player {
 		public delegate void CellLooper(int x, int y);
-		
+
 		public Brush Brush { get; }
 		public byte X { get; set; } = byte.MaxValue;
 		public byte Y { get; set; } = byte.MaxValue;
@@ -12,7 +12,7 @@ namespace DoubleSocket.Example.Client {
 			Brush = new SolidBrush(color);
 		}
 
-		
+
 
 		public void LoopOverCells(CellLooper action) {
 			if (X == byte.MaxValue || Y == byte.MaxValue) {

@@ -97,7 +97,7 @@ namespace DoubleSocket.Client {
 		}
 
 
-		
+
 		/// <summary>
 		/// Sends the specified payload over TCP.
 		/// </summary>
@@ -198,9 +198,9 @@ namespace DoubleSocket.Client {
 						});
 					}
 				} else if (CurrentState == State.UdpAuthenticating) {
-					if (_receiveBuffer.Array.Length == 1 && _receiveBuffer.ReadByte() == 0) {
+					if (_receiveBuffer.ReadByte() == 0) {
 						CurrentState = State.Authenticated;
-						_handler.OnFullAuthentication();
+						_handler.OnFullAuthentication(_receiveBuffer);
 					}
 				} else {
 					if (_receiveBuffer.ReadByte() == _receiveSequenceId) {

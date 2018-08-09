@@ -19,6 +19,7 @@ namespace DoubleSocket.Test {
 		public const int DataSize = 1000;
 		public static readonly IPAddress Ip = IPAddress.Loopback;
 		private static readonly Random Random = new Random();
+		private static readonly int FinalAuthenticationPacketPayload = Random.Next();
 
 		[Test, Timeout(2000)]
 		public void Test() {
@@ -75,8 +76,9 @@ namespace DoubleSocket.Test {
 				return true;
 			}
 
-			public void OnFullAuthentication(IDoubleServerClient client) {
+			public Action<ByteBuffer> OnFullAuthentication(IDoubleServerClient client) {
 				Console.WriteLine("Server fully authenticated client");
+				return buffer => buffer.Write(FinalAuthenticationPacketPayload);
 			}
 
 			public void OnTcpReceived(IDoubleServerClient client, ByteBuffer buffer) {
@@ -112,7 +114,9 @@ namespace DoubleSocket.Test {
 				PrintAndThrow("TCP authentication timeout: " + state);
 			}
 
-			public void OnFullAuthentication() {
+			public void OnFullAuthentication(ByteBuffer buffer) {
+				Assert.IsTrue(buffer.ReadInt() == FinalAuthenticationPacketPayload,
+					"Invalid extra information in final authentication packet.");
 				Console.WriteLine("Client got fully authenticated");
 				if (MaySend) {
 					Console.WriteLine("Client not waiting for main thread");
