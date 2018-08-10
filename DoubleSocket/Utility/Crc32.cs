@@ -57,7 +57,7 @@
 			}
 
 			while (--count >= 0) {
-				crcLocal = Table[(byte)(crcLocal ^ input[offset++])] ^ crcLocal >> 8;
+				crcLocal = Table[(byte)(crcLocal ^ input[offset++])] ^ (crcLocal >> 8);
 			}
 
 			return ~crcLocal;

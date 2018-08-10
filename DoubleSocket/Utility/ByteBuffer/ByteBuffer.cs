@@ -69,13 +69,13 @@ namespace DoubleSocket.Utility.ByteBuffer {
 
 		public void Write(long value) {
 			for (int i = 0; i < 8; i++) {
-				Array[WriteIndex++] = (byte)(value >> i * 8);
+				Array[WriteIndex++] = (byte)(value >> (i * 8));
 			}
 		}
 
 		public void Write(ulong value) {
 			for (int i = 0; i < 8; i++) {
-				Array[WriteIndex++] = (byte)(value >> i * 8);
+				Array[WriteIndex++] = (byte)(value >> (i * 8));
 			}
 		}
 
@@ -147,7 +147,7 @@ namespace DoubleSocket.Utility.ByteBuffer {
 
 		public double ReadDouble() {
 			ReadIndex += 8;
-			return BitConverter.ToSingle(Array, ReadIndex - 8);
+			return BitConverter.ToDouble(Array, ReadIndex - 8);
 		}
 
 		public string ReadString(int count) {
