@@ -13,7 +13,8 @@ namespace DoubleSocket.Server {
 	/// A server which has a TCP and an UDP socket. It has multiple authentication phases to make the TCP and the UDP packets
 	/// sychronized on this (server) side as well. It sends the packets in an encrypted form, makes sure that the received packets
 	/// are reassembled and are valid. It locks on itself (the current instance) for thread safety reason,
-	/// which can be used to achieve even greater thread safety.
+	/// which can be used to achieve even greater thread safety; but to make using this library easier,
+	/// all methods internally silenty fail if this current server is disconnected.
 	/// </summary>
 	public class DoubleServer {
 		/// <summary>
@@ -37,6 +38,7 @@ namespace DoubleSocket.Server {
 		private readonly TcpServerSocket _tcp;
 		private readonly UdpServerSocket _udp;
 		private int _authenticatedCount;
+		private bool _closed;
 
 		/// <summary>
 		/// Create a new instance of the client with the specified options.
@@ -63,6 +65,11 @@ namespace DoubleSocket.Server {
 		/// </summary>
 		public void Close() {
 			lock (this) {
+				if (_closed) {
+					return;
+				}
+
+				_closed = true;
 				_tcp.Close();
 				_udp.Close();
 				_crypto.Dispose();
@@ -75,6 +82,10 @@ namespace DoubleSocket.Server {
 		/// <param name="client">The client in question.</param>
 		public void Disconnect(IDoubleServerClient client) {
 			lock (this) {
+				if (_closed) {
+					return;
+				}
+
 				DoubleServerClient impl = (DoubleServerClient)client;
 				impl.Disconnected();
 				_tcpClients.Remove(impl.TcpSocket);
@@ -98,6 +109,10 @@ namespace DoubleSocket.Server {
 		/// <param name="payloadWriter">The action which writes the payload to a buffer.</param>
 		public void SendTcp(IDoubleServerClient recipient, Action<ByteBuffer> payloadWriter) {
 			lock (this) {
+				if (_closed) {
+					return;
+				}
+
 				DoubleServerClient client = (DoubleServerClient)recipient;
 				SendEncryptedLengthPrefixOnlyTcp(client.TcpSocket, client.EncryptionKey, buffer => {
 					buffer.Write(client.NextSendSequenceId());
@@ -126,6 +141,10 @@ namespace DoubleSocket.Server {
 		/// <param name="payloadWriter">The action which writes the payload to a buffer.</param>
 		public void SendUdp(IDoubleServerClient recipient, Action<ByteBuffer> payloadWriter) {
 			lock (this) {
+				if (_closed) {
+					return;
+				}
+
 				DoubleServerClient client = (DoubleServerClient)recipient;
 				using (_sendBuffer) {
 					UdpHelper.WritePrefix(_sendBuffer, client.ConnectionStartTimestamp, payloadWriter);
@@ -139,6 +158,10 @@ namespace DoubleSocket.Server {
 
 		private void OnTcpConnected(Socket socket) {
 			lock (this) {
+				if (_closed) {
+					return;
+				}
+
 				DoubleServerClient client = new DoubleServerClient(socket);
 				_tcpClients.Add(socket, client);
 				Task.Delay(TcpAuthenticationTimeout).ContinueWith(task => {
@@ -153,6 +176,10 @@ namespace DoubleSocket.Server {
 
 		private void OnTcpPacketAssembled(Socket sender, byte[] buffer, int offset, int size) {
 			lock (this) {
+				if (_closed) {
+					return;
+				}
+
 				DoubleServerClient client = _tcpClients[sender];
 				_receiveBuffer.Array = buffer;
 				_receiveBuffer.WriteIndex = size + offset;
@@ -202,6 +229,10 @@ namespace DoubleSocket.Server {
 
 		private void OnTcpLostConnection(Socket socket) {
 			lock (this) {
+				if (_closed) {
+					return;
+				}
+
 				if (_tcpClients.TryGetValue(socket, out DoubleServerClient client)) {
 					ClientState state = client.State;
 					Disconnect(client);
@@ -212,6 +243,10 @@ namespace DoubleSocket.Server {
 
 		private void OnUdpReceived(EndPoint sender, byte[] buffer, int size) {
 			lock (this) {
+				if (_closed) {
+					return;
+				}
+
 				if (_udpClients.TryGetValue(sender, out DoubleServerClient client)) {
 					try {
 						_receiveBuffer.Array = _crypto.Decrypt(client.EncryptionKey, buffer, 0, size);

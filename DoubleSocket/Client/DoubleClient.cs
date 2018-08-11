@@ -12,7 +12,8 @@ namespace DoubleSocket.Client {
 	/// A client which has a TCP and an UDP socket. It has multiple authentication phases to make the TCP and the UDP packets
 	/// sychronized on the server side as well. It sends the packets in an encrypted form, makes sure that the received packets
 	/// are reassembled and are valid. It locks on itself (the current instance) for thread safety reason,
-	/// which can be used to achieve even greater thread safety.
+	/// which can be used to achieve even greater thread safety; but to make using this library easier,
+	/// all methods internally silenty fail if this current client is disconnected.
 	/// </summary>
 	public class DoubleClient {
 		/// <summary>
@@ -35,6 +36,11 @@ namespace DoubleSocket.Client {
 		/// </summary>
 		public State CurrentState { get; private set; } = State.Disconnected;
 
+		/// <summary>
+		/// The timestamp of the connection's establishment or -1 if the connection is yet to be established.
+		/// </summary>
+		public long ConnectionStartTimestamp { get; private set; } = -1;
+
 		private readonly MutableByteBuffer _receiveBuffer = new MutableByteBuffer();
 		private readonly ResettingByteBuffer _sendBuffer = new ResettingByteBuffer(DoubleProtocol.SendBufferArraySize);
 		private readonly IDoubleClientHandler _handler;
@@ -45,7 +51,6 @@ namespace DoubleSocket.Client {
 		private readonly int _port;
 		private byte[] _authenticationData;
 		private byte _sequenceIdBound;
-		private long _connectionStartTimestamp;
 		private byte _sendSequenceId;
 		private byte _receiveSequenceId;
 
@@ -89,6 +94,10 @@ namespace DoubleSocket.Client {
 		/// </summary>
 		public void Close() {
 			lock (this) {
+				if (CurrentState == State.Disconnected) {
+					return;
+				}
+
 				CurrentState = State.Disconnected;
 				_tcp.Close();
 				_udp.Close();
@@ -104,6 +113,10 @@ namespace DoubleSocket.Client {
 		/// <param name="payloadWriter">The action which writes the payload to a buffer.</param>
 		public void SendTcp(Action<ByteBuffer> payloadWriter) {
 			lock (this) {
+				if (CurrentState == State.Disconnected) {
+					return;
+				}
+
 				byte[] encrypted;
 				using (_sendBuffer) {
 					_sendBuffer.Write(_sendSequenceId);
@@ -127,8 +140,12 @@ namespace DoubleSocket.Client {
 		/// <param name="payloadWriter">The action which writes the payload to a buffer.</param>
 		public void SendUdp(Action<ByteBuffer> payloadWriter) {
 			lock (this) {
+				if (CurrentState == State.Disconnected) {
+					return;
+				}
+
 				using (_sendBuffer) {
-					UdpHelper.WritePrefix(_sendBuffer, _connectionStartTimestamp, payloadWriter);
+					UdpHelper.WritePrefix(_sendBuffer, ConnectionStartTimestamp, payloadWriter);
 					byte[] encrypted = _crypto.Encrypt(_sendBuffer.Array, 0, _sendBuffer.WriteIndex);
 					_udp.Send(encrypted, 0, encrypted.Length);
 				}
@@ -139,6 +156,10 @@ namespace DoubleSocket.Client {
 
 		private void OnTcpConnected() {
 			lock (this) {
+				if (CurrentState == State.Disconnected) {
+					return;
+				}
+
 				using (_sendBuffer) {
 					_sendBuffer.WriteIndex = 2;
 					_sendBuffer.Write(_authenticationData);
@@ -161,13 +182,19 @@ namespace DoubleSocket.Client {
 
 		private void OnTcpConnectionFailed(SocketError error) {
 			lock (this) {
-				Close();
-				_handler.OnConnectionFailure(error);
+				if (CurrentState != State.Disconnected) {
+					Close();
+					_handler.OnConnectionFailure(error);
+				}
 			}
 		}
 
 		private void OnTcpPacketAssembled(Socket ignored, byte[] buffer, int offset, int size) {
 			lock (this) {
+				if (CurrentState == State.Disconnected) {
+					return;
+				}
+
 				_receiveBuffer.Array = _crypto.Decrypt(buffer, offset, size);
 				_receiveBuffer.WriteIndex = _receiveBuffer.Array.Length;
 				_receiveBuffer.ReadIndex = 0;
@@ -180,7 +207,7 @@ namespace DoubleSocket.Client {
 						CurrentState = State.UdpAuthenticating;
 						_sequenceIdBound = _receiveBuffer.ReadByte();
 						byte[] udpAuthenticationKey = _receiveBuffer.ReadBytes(8);
-						_connectionStartTimestamp = _receiveBuffer.ReadLong();
+						ConnectionStartTimestamp = _receiveBuffer.ReadLong();
 
 						_udp.Start(_ip, _port);
 						Task.Run(() => {
@@ -231,6 +258,10 @@ namespace DoubleSocket.Client {
 
 		private void OnUdpReceived(byte[] buffer, int size) {
 			lock (this) {
+				if (CurrentState == State.Disconnected) {
+					return;
+				}
+
 				_receiveBuffer.Array = _crypto.Decrypt(buffer, 0, size);
 				_receiveBuffer.WriteIndex = _receiveBuffer.Array.Length;
 				_receiveBuffer.ReadIndex = 0;
