@@ -8,9 +8,9 @@ namespace DoubleSocket.Test {
 	/// </summary>
 	[TestFixture]
 	public class Crc32Test {
-		private const string First = "H";
-		private const string Second = "Hello";
-		private const string Third = "Hello dear human/nonhuman being looking at this!";
+		public const string First = "H";
+		public const string Second = "Hello";
+		public const string Third = "Hello dear human/nonhuman being looking at this!";
 
 		[Test]
 		public void Test() {

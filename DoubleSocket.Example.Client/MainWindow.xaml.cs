@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Diagnostics.CodeAnalysis;
 using System.Drawing;
 using System.Net;
 using System.Net.Sockets;
@@ -10,7 +9,7 @@ using System.Windows.Input;
 using System.Windows.Threading;
 using DoubleSocket.Client;
 using DoubleSocket.Protocol;
-using DoubleSocket.Utility.ByteBuffer;
+using DoubleSocket.Utility.BitBuffer;
 
 namespace DoubleSocket.Example.Client {
 	public partial class MainWindow : IDoubleClientHandler {
@@ -19,7 +18,7 @@ namespace DoubleSocket.Example.Client {
 		private readonly IDictionary<byte, Player> _players = new Dictionary<byte, Player>();
 		private readonly DispatcherTimer _timer = new DispatcherTimer();
 		private DoubleClient _client;
-		private ushort _newestPacketTimestamp;
+		private uint _newestPacketTimestamp;
 
 		public MainWindow() {
 			InitializeComponent();
@@ -31,7 +30,10 @@ namespace DoubleSocket.Example.Client {
 				byte y = CalculateCellCoordinate(mouse.Y, DisplayedImage.ActualHeight);
 
 				lock (_client) {
-					_client.SendUdp(buff => buff.Write((byte)(x | (y << 4))));
+					_client.SendUdp(buff => {
+						buff.WriteBits(x, 4);
+						buff.WriteBits(y, 4);
+					});
 					_cellMap.AsSourceOf(DisplayedImage);
 				}
 			};
@@ -48,29 +50,26 @@ namespace DoubleSocket.Example.Client {
 			return mouse > CellMap.Dimension ? byte.MaxValue : Convert.ToByte(mouse);
 		}
 
-
-
-		public void OnTcpReceived(ByteBuffer buffer) {
-			switch (buffer.ReadByte()) {
+		private static Color GetColor(ulong bits) {
+			switch (bits) {
 				case 0:
-					while (buffer.ReadIndex < buffer.WriteIndex) {
-						_players.Add(buffer.ReadByte(), new Player(Color.FromArgb(buffer.ReadInt())));
-					}
-					Dispatcher.InvokeAsync(() => {
-						_timer.Start();
-						lock (_client) {
-							PlayersText.Text = _players.Count.ToString();
-						}
-					});
-					return;
+					return Color.Red;
 				case 1:
-					_players.Add(buffer.ReadByte(), new Player(Color.FromArgb(buffer.ReadInt())));
-					break;
+					return Color.Green;
 				case 2:
-					_players.Remove(buffer.ReadByte());
-					break;
+					return Color.Blue;
 				default:
-					throw new Exception("Invalid TCP packet type was received");
+					throw new Exception("Invalid color was received");
+			}
+		}
+
+
+
+		public void OnTcpReceived(BitBuffer buffer) {
+			if (buffer.ReadBool()) {
+				_players.Add((byte)buffer.ReadBits(2), new Player(GetColor(buffer.ReadBits(2))));
+			} else {
+				_players.Remove((byte)buffer.ReadBits(2));
 			}
 
 			Dispatcher.InvokeAsync(() => {
@@ -82,7 +81,7 @@ namespace DoubleSocket.Example.Client {
 
 
 
-		public void OnUdpReceived(ByteBuffer buffer, ushort packetTimestamp) {
+		public void OnUdpReceived(BitBuffer buffer, uint packetTimestamp) {
 			if (!DoubleProtocol.IsPacketNewest(ref _newestPacketTimestamp, packetTimestamp)) {
 				return;
 			}
@@ -91,11 +90,12 @@ namespace DoubleSocket.Example.Client {
 				player.LoopOverCells((x, y) => _cellMap.Set(x, y, CellMap.DefaultBrush));
 			}
 
-			while (buffer.ReadIndex < buffer.WriteIndex) {
-				if (_players.TryGetValue(buffer.ReadByte(), out Player player)) {
-					byte value = buffer.ReadByte();
-					player.X = (byte)(value & 0b00001111);
-					player.Y = (byte)(value >> 4);
+			for (ulong i = buffer.ReadBits(2); i > 0; i--) {
+				if (_players.TryGetValue((byte)buffer.ReadBits(2), out Player player)) {
+					player.X = (byte)buffer.ReadBits(4);
+					player.Y = (byte)buffer.ReadBits(4);
+				} else {
+					buffer.AdvanceReader(8);
 				}
 			}
 
@@ -106,7 +106,6 @@ namespace DoubleSocket.Example.Client {
 
 
 
-		[SuppressMessage("ReSharper", "InconsistentlySynchronizedField")]
 		private void OnConnectButtonClick(object sender, RoutedEventArgs e) {
 			if (!IPAddress.TryParse(AddressInput.Text, out IPAddress ip)) {
 				StatusText.Text = "Invalid IP";
@@ -159,10 +158,17 @@ namespace DoubleSocket.Example.Client {
 
 
 
-		public void OnFullAuthentication(ByteBuffer buffer) {
+		public void OnFullAuthentication(BitBuffer buffer) {
+			for (ulong i = buffer.ReadBits(2); i > 0; i--) {
+				_players.Add((byte)buffer.ReadBits(2), new Player(GetColor(buffer.ReadBits(2))));
+			}
 			Dispatcher.InvokeAsync(() => {
 				StatusText.Text = "Connected";
 				DisconnectButton.IsEnabled = true;
+				_timer.Start();
+				lock (_client) {
+					PlayersText.Text = _players.Count.ToString();
+				}
 			});
 		}
 

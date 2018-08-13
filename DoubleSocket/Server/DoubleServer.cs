@@ -1,11 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Threading.Tasks;
 using DoubleSocket.Protocol;
-using DoubleSocket.Utility.ByteBuffer;
+using DoubleSocket.Utility.BitBuffer;
 using DoubleSocket.Utility.KeyCrypto;
 
 namespace DoubleSocket.Server {
@@ -30,8 +31,8 @@ namespace DoubleSocket.Server {
 		private readonly IDictionary<Socket, DoubleServerClient> _tcpClients = new Dictionary<Socket, DoubleServerClient>();
 		private readonly IDictionary<EndPoint, DoubleServerClient> _udpClients = new Dictionary<EndPoint, DoubleServerClient>();
 		private readonly IDictionary<ulong, DoubleServerClient> _udpAuthenticationKeys = new Dictionary<ulong, DoubleServerClient>();
-		private readonly MutableByteBuffer _receiveBuffer = new MutableByteBuffer();
-		private readonly ResettingByteBuffer _sendBuffer = new ResettingByteBuffer(DoubleProtocol.SendBufferArraySize);
+		private readonly MutableBitBuffer _receiveBuffer = new MutableBitBuffer();
+		private readonly ResettingBitBuffer _sendBuffer = new ResettingBitBuffer(DoubleProtocol.SendBufferArraySize);
 		private readonly AnyKeyCrypto _crypto = new AnyKeyCrypto();
 		private readonly IDoubleServerHandler _handler;
 		private readonly int _maxAuthenticatedCount;
@@ -107,7 +108,7 @@ namespace DoubleSocket.Server {
 		/// </summary>
 		/// <param name="recipient">The client in question.</param>
 		/// <param name="payloadWriter">The action which writes the payload to a buffer.</param>
-		public void SendTcp(IDoubleServerClient recipient, Action<ByteBuffer> payloadWriter) {
+		public void SendTcp(IDoubleServerClient recipient, Action<BitBuffer> payloadWriter) {
 			lock (this) {
 				if (_closed) {
 					return;
@@ -121,16 +122,16 @@ namespace DoubleSocket.Server {
 			}
 		}
 
-		private void SendEncryptedLengthPrefixOnlyTcp(Socket recipient, byte[] encryptionKey, Action<ByteBuffer> payloadWriter) {
+		private void SendEncryptedLengthPrefixOnlyTcp(Socket recipient, byte[] encryptionKey, Action<BitBuffer> payloadWriter) {
 			byte[] encrypted;
 			using (_sendBuffer) {
 				payloadWriter(_sendBuffer);
-				encrypted = _crypto.Encrypt(encryptionKey, _sendBuffer.Array, 0, _sendBuffer.WriteIndex);
+				encrypted = _crypto.Encrypt(encryptionKey, _sendBuffer.Array, 0, _sendBuffer.Size);
 			}
 			using (_sendBuffer) {
 				_sendBuffer.Write((ushort)encrypted.Length);
 				_sendBuffer.Write(encrypted);
-				_tcp.Send(recipient, _sendBuffer.Array, 0, _sendBuffer.WriteIndex);
+				_tcp.Send(recipient, _sendBuffer.Array, 0, _sendBuffer.Size);
 			}
 		}
 
@@ -139,7 +140,7 @@ namespace DoubleSocket.Server {
 		/// </summary>
 		/// <param name="recipient">The client in question.</param>
 		/// <param name="payloadWriter">The action which writes the payload to a buffer.</param>
-		public void SendUdp(IDoubleServerClient recipient, Action<ByteBuffer> payloadWriter) {
+		public void SendUdp(IDoubleServerClient recipient, Action<BitBuffer> payloadWriter) {
 			lock (this) {
 				if (_closed) {
 					return;
@@ -148,7 +149,7 @@ namespace DoubleSocket.Server {
 				DoubleServerClient client = (DoubleServerClient)recipient;
 				using (_sendBuffer) {
 					UdpHelper.WritePrefix(_sendBuffer, client.ConnectionStartTimestamp, payloadWriter);
-					byte[] encrypted = _crypto.Encrypt(client.EncryptionKey, _sendBuffer.Array, 0, _sendBuffer.WriteIndex);
+					byte[] encrypted = _crypto.Encrypt(client.EncryptionKey, _sendBuffer.Array, 0, _sendBuffer.Size);
 					_udp.Send(client.UdpEndPoint, encrypted, 0, encrypted.Length);
 				}
 			}
@@ -181,9 +182,7 @@ namespace DoubleSocket.Server {
 				}
 
 				DoubleServerClient client = _tcpClients[sender];
-				_receiveBuffer.Array = buffer;
-				_receiveBuffer.WriteIndex = size + offset;
-				_receiveBuffer.ReadIndex = offset;
+				_receiveBuffer.Reinitialize(buffer, offset, size);
 
 				if (client.State == ClientState.TcpAuthenticating) {
 					if (_handler.TcpAuthenticateClient(client, _receiveBuffer, out byte[] encryptionKey, out byte errorCode)) {
@@ -192,7 +191,7 @@ namespace DoubleSocket.Server {
 
 						if (++_authenticatedCount == _maxAuthenticatedCount) {
 							_tcp.StopAccepting();
-							foreach (DoubleServerClient connected in _tcpClients.Values) {
+							foreach (DoubleServerClient connected in _tcpClients.Values.ToList()) {
 								if (connected.State == ClientState.TcpAuthenticating) {
 									Disconnect(connected);
 								}
@@ -216,10 +215,8 @@ namespace DoubleSocket.Server {
 						Disconnect(client);
 					}
 				} else if (client.State == ClientState.Authenticated) {
-					_receiveBuffer.Array = _crypto.Decrypt(client.EncryptionKey, _receiveBuffer.Array,
-						_receiveBuffer.ReadIndex, _receiveBuffer.BytesLeft);
-					_receiveBuffer.WriteIndex = _receiveBuffer.Array.Length;
-					_receiveBuffer.ReadIndex = 0;
+					_receiveBuffer.Reinitialize(_crypto.Decrypt(client.EncryptionKey, _receiveBuffer.Array,
+						_receiveBuffer.Offset, _receiveBuffer.Size));
 					if (client.CheckReceiveSequenceId(_receiveBuffer.ReadByte())) {
 						_handler.OnTcpReceived(client, _receiveBuffer);
 					}
@@ -249,10 +246,8 @@ namespace DoubleSocket.Server {
 
 				if (_udpClients.TryGetValue(sender, out DoubleServerClient client)) {
 					try {
-						_receiveBuffer.Array = _crypto.Decrypt(client.EncryptionKey, buffer, 0, size);
-						_receiveBuffer.WriteIndex = _receiveBuffer.Array.Length;
-						_receiveBuffer.ReadIndex = 0;
-						if (UdpHelper.PrefixCheck(_receiveBuffer, out ushort packetTimestamp)) {
+						_receiveBuffer.Reinitialize(_crypto.Decrypt(client.EncryptionKey, buffer, 0, size));
+						if (UdpHelper.PrefixCheck(_receiveBuffer, out uint packetTimestamp)) {
 							_handler.OnUdpReceived(client, _receiveBuffer, packetTimestamp);
 						}
 					} catch (CryptographicException) {
@@ -261,7 +256,7 @@ namespace DoubleSocket.Server {
 					if (_udpAuthenticationKeys.TryGetValue(BitConverter.ToUInt64(buffer, 0), out client)) {
 						client.UdpAuthenticated(sender);
 						_udpClients.Add(sender, client);
-						Action<ByteBuffer> payloadWriter = _handler.OnFullAuthentication(client);
+						Action<BitBuffer> payloadWriter = _handler.OnFullAuthentication(client);
 						SendEncryptedLengthPrefixOnlyTcp(client.TcpSocket, client.EncryptionKey, buff => {
 							buff.Write((byte)0);
 							payloadWriter?.Invoke(buff);

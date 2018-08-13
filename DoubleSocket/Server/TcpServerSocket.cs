@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using DoubleSocket.Protocol;
@@ -114,11 +115,9 @@ namespace DoubleSocket.Server {
 				_accepting = false;
 			}
 			_socket.Close();
-			lock (_connectedSockets) {
-				foreach (Socket socket in _connectedSockets) {
-					lock (_sendEventArgsQueue) {
-						TcpHelper.DisconnectAsync(socket, _sendEventArgsQueue, OnSent);
-					}
+			foreach (Socket socket in _connectedSockets.ToList()) {
+				lock (_sendEventArgsQueue) {
+					TcpHelper.DisconnectAsync(socket, _sendEventArgsQueue, OnSent);
 				}
 			}
 		}
@@ -236,10 +235,7 @@ namespace DoubleSocket.Server {
 							return;
 						}
 
-						lock (_connectedSockets) {
-							_connectionLostHandler(userToken.Socket);
-						}
-
+						_connectionLostHandler(userToken.Socket);
 						userToken.Deinitialize();
 						lock (_receiveEventArgsQueue) {
 							_receiveEventArgsQueue.Enqueue(eventArgs);

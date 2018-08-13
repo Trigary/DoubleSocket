@@ -53,6 +53,7 @@
     <Compile Include="CryptoTest.cs" />
     <Compile Include="DoubleEchoTest.cs" />
     <Compile Include="TcpPacketReassemblyTest.cs" />
+    <Compile Include="BitBufferTest.cs" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\DoubleSocket\DoubleSocket.csproj">

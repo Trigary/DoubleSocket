@@ -56,9 +56,9 @@
     <Compile Include="Server\IDoubleServerHandler.cs" />
     <Compile Include="Server\TcpServerSocket.cs" />
     <Compile Include="Server\UdpServerSocket.cs" />
-    <Compile Include="Utility\ByteBuffer\ByteBuffer.cs" />
-    <Compile Include="Utility\ByteBuffer\ResettingByteBuffer.cs" />
-    <Compile Include="Utility\ByteBuffer\MutableByteBuffer.cs" />
+    <Compile Include="Utility\BitBuffer\BitBuffer.cs" />
+    <Compile Include="Utility\BitBuffer\ResettingBitBuffer.cs" />
+    <Compile Include="Utility\BitBuffer\MutableBitBuffer.cs" />
     <Compile Include="Utility\Crc32.cs" />
     <Compile Include="Utility\KeyCrypto\AnyKeyCrypto.cs" />
     <Compile Include="Utility\KeyCrypto\FixedKeyCrypto.cs" />

@@ -1,5 +1,5 @@
 ﻿using System;
-using DoubleSocket.Utility.ByteBuffer;
+using DoubleSocket.Utility.BitBuffer;
 
 namespace DoubleSocket.Server {
 	/// <summary>
@@ -16,7 +16,7 @@ namespace DoubleSocket.Server {
 		/// <param name="errorCode">The error code of the failed authentication, this is relayed to the client.
 		/// It is ignored if the authentication is successful.</param>
 		/// <returns>Whether the authentication was successful.</returns>
-		bool TcpAuthenticateClient(IDoubleServerClient client, ByteBuffer buffer, out byte[] encryptionKey, out byte errorCode);
+		bool TcpAuthenticateClient(IDoubleServerClient client, BitBuffer buffer, out byte[] encryptionKey, out byte errorCode);
 
 		/// <summary>
 		/// Called when the client's UDP channel also got authenticated after its TCP channel.
@@ -24,14 +24,14 @@ namespace DoubleSocket.Server {
 		/// <param name="client">The client in question.</param>
 		/// <returns>The action which writes the payload which should be included in the final authentication confirmation
 		/// packet sent to the client to a buffer or null if no extra information should be sent in the packet.</returns>
-		Action<ByteBuffer> OnFullAuthentication(IDoubleServerClient client);
+		Action<BitBuffer> OnFullAuthentication(IDoubleServerClient client);
 
 		/// <summary>
 		/// Called when the server received data over the TCP channel from the client.
 		/// </summary>
 		/// <param name="client">The client in question.</param>
 		/// <param name="buffer">The buffer which holds the decrypted received data.</param>
-		void OnTcpReceived(IDoubleServerClient client, ByteBuffer buffer);
+		void OnTcpReceived(IDoubleServerClient client, BitBuffer buffer);
 
 		/// <summary>
 		/// Called when the server received data over the UDP channel from the client.
@@ -39,7 +39,7 @@ namespace DoubleSocket.Server {
 		/// <param name="client">The client in question.</param>
 		/// <param name="buffer">The buffer which holds the decrypted received data.</param>
 		/// <param name="packetTimestamp">A timestamp which can be used in the DoubleProtocol utility class.</param>
-		void OnUdpReceived(IDoubleServerClient client, ByteBuffer buffer, ushort packetTimestamp);
+		void OnUdpReceived(IDoubleServerClient client, BitBuffer buffer, uint packetTimestamp);
 
 		/// <summary>
 		/// Called when the client loses connection to the server.

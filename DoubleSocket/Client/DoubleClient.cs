@@ -4,7 +4,7 @@ using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
 using DoubleSocket.Protocol;
-using DoubleSocket.Utility.ByteBuffer;
+using DoubleSocket.Utility.BitBuffer;
 using DoubleSocket.Utility.KeyCrypto;
 
 namespace DoubleSocket.Client {
@@ -41,8 +41,8 @@ namespace DoubleSocket.Client {
 		/// </summary>
 		public long ConnectionStartTimestamp { get; private set; } = -1;
 
-		private readonly MutableByteBuffer _receiveBuffer = new MutableByteBuffer();
-		private readonly ResettingByteBuffer _sendBuffer = new ResettingByteBuffer(DoubleProtocol.SendBufferArraySize);
+		private readonly MutableBitBuffer _receiveBuffer = new MutableBitBuffer();
+		private readonly ResettingBitBuffer _sendBuffer = new ResettingBitBuffer(DoubleProtocol.SendBufferArraySize);
 		private readonly IDoubleClientHandler _handler;
 		private readonly FixedKeyCrypto _crypto;
 		private readonly TcpClientSocket _tcp;
@@ -111,7 +111,7 @@ namespace DoubleSocket.Client {
 		/// Sends the specified payload over TCP.
 		/// </summary>
 		/// <param name="payloadWriter">The action which writes the payload to a buffer.</param>
-		public void SendTcp(Action<ByteBuffer> payloadWriter) {
+		public void SendTcp(Action<BitBuffer> payloadWriter) {
 			lock (this) {
 				if (CurrentState == State.Disconnected) {
 					return;
@@ -124,12 +124,12 @@ namespace DoubleSocket.Client {
 						_sendSequenceId = 0;
 					}
 					payloadWriter(_sendBuffer);
-					encrypted = _crypto.Encrypt(_sendBuffer.Array, 0, _sendBuffer.WriteIndex);
+					encrypted = _crypto.Encrypt(_sendBuffer.Array, 0, _sendBuffer.Size);
 				}
 				using (_sendBuffer) {
 					_sendBuffer.Write((ushort)encrypted.Length);
 					_sendBuffer.Write(encrypted);
-					_tcp.Send(_sendBuffer.Array, 0, _sendBuffer.WriteIndex);
+					_tcp.Send(_sendBuffer.Array, 0, _sendBuffer.Size);
 				}
 			}
 		}
@@ -138,7 +138,7 @@ namespace DoubleSocket.Client {
 		/// Sends the specified payload over UDP.
 		/// </summary>
 		/// <param name="payloadWriter">The action which writes the payload to a buffer.</param>
-		public void SendUdp(Action<ByteBuffer> payloadWriter) {
+		public void SendUdp(Action<BitBuffer> payloadWriter) {
 			lock (this) {
 				if (CurrentState == State.Disconnected) {
 					return;
@@ -146,7 +146,7 @@ namespace DoubleSocket.Client {
 
 				using (_sendBuffer) {
 					UdpHelper.WritePrefix(_sendBuffer, ConnectionStartTimestamp, payloadWriter);
-					byte[] encrypted = _crypto.Encrypt(_sendBuffer.Array, 0, _sendBuffer.WriteIndex);
+					byte[] encrypted = _crypto.Encrypt(_sendBuffer.Array, 0, _sendBuffer.Size);
 					_udp.Send(encrypted, 0, encrypted.Length);
 				}
 			}
@@ -161,13 +161,13 @@ namespace DoubleSocket.Client {
 				}
 
 				using (_sendBuffer) {
-					_sendBuffer.WriteIndex = 2;
+					_sendBuffer.AdvanceWriter(16);
 					_sendBuffer.Write(_authenticationData);
 					_authenticationData = null;
-					ushort size = (ushort)(_sendBuffer.WriteIndex - 2);
+					ushort size = (ushort)(_sendBuffer.Size - 2);
 					_sendBuffer.Array[0] = (byte)size;
 					_sendBuffer.Array[1] = (byte)(size >> 8);
-					_tcp.Send(_sendBuffer.Array, 0, _sendBuffer.WriteIndex);
+					_tcp.Send(_sendBuffer.Array, 0, _sendBuffer.Size);
 
 					Task.Delay(TcpAuthenticationTimeout).ContinueWith(task => {
 						lock (this) {
@@ -195,10 +195,7 @@ namespace DoubleSocket.Client {
 					return;
 				}
 
-				_receiveBuffer.Array = _crypto.Decrypt(buffer, offset, size);
-				_receiveBuffer.WriteIndex = _receiveBuffer.Array.Length;
-				_receiveBuffer.ReadIndex = 0;
-
+				_receiveBuffer.Reinitialize(_crypto.Decrypt(buffer, offset, size));
 				if (CurrentState == State.TcpAuthenticating) {
 					if (_receiveBuffer.Array.Length == 1) {
 						Close();
@@ -262,11 +259,8 @@ namespace DoubleSocket.Client {
 					return;
 				}
 
-				_receiveBuffer.Array = _crypto.Decrypt(buffer, 0, size);
-				_receiveBuffer.WriteIndex = _receiveBuffer.Array.Length;
-				_receiveBuffer.ReadIndex = 0;
-
-				if (UdpHelper.PrefixCheck(_receiveBuffer, out ushort packetTimestamp)) {
+				_receiveBuffer.Reinitialize(_crypto.Decrypt(buffer, 0, size));
+				if (UdpHelper.PrefixCheck(_receiveBuffer, out uint packetTimestamp)) {
 					_handler.OnUdpReceived(_receiveBuffer, packetTimestamp);
 				}
 			}

@@ -5,7 +5,7 @@ using System.Net.Sockets;
 using System.Threading;
 using DoubleSocket.Client;
 using DoubleSocket.Server;
-using DoubleSocket.Utility.ByteBuffer;
+using DoubleSocket.Utility.BitBuffer;
 using NUnit.Framework;
 
 namespace DoubleSocket.Test {
@@ -69,26 +69,30 @@ namespace DoubleSocket.Test {
 		private class DoubleServerHandler : IDoubleServerHandler {
 			public DoubleServer Server { private get; set; }
 
-			public bool TcpAuthenticateClient(IDoubleServerClient client, ByteBuffer buffer, out byte[] encryptionKey, out byte errorCode) {
+			public bool TcpAuthenticateClient(IDoubleServerClient client, BitBuffer buffer, out byte[] encryptionKey, out byte errorCode) {
 				Console.WriteLine("Server TCP authenticated client");
-				encryptionKey = buffer.ReadBytes();
+				encryptionKey = buffer.ReadBytes(buffer.StartedBytesLeft);
 				errorCode = 0;
 				return true;
 			}
 
-			public Action<ByteBuffer> OnFullAuthentication(IDoubleServerClient client) {
+			public Action<BitBuffer> OnFullAuthentication(IDoubleServerClient client) {
 				Console.WriteLine("Server fully authenticated client");
 				return buffer => buffer.Write(FinalAuthenticationPacketPayload);
 			}
 
-			public void OnTcpReceived(IDoubleServerClient client, ByteBuffer buffer) {
-				Console.WriteLine("SRec TCP " + buffer.BytesLeft);
-				Server.SendTcp(client, buff => buff.Write(buffer.Array, buffer.ReadIndex, buffer.BytesLeft));
+			public void OnTcpReceived(IDoubleServerClient client, BitBuffer buffer) {
+				Console.WriteLine("SRec TCP " + buffer.StartedBytesLeft);
+				Server.SendTcp(client, buff => buff.Write(buffer.Array, buffer.Offset, buffer.Size));
 			}
 
-			public void OnUdpReceived(IDoubleServerClient client, ByteBuffer buffer, ushort packetTimestamp) {
-				Console.WriteLine("SRec UDP " + buffer.BytesLeft + " " + packetTimestamp);
-				Server.SendUdp(client, buff => buff.Write(buffer.Array, buffer.ReadIndex, buffer.BytesLeft));
+			public void OnUdpReceived(IDoubleServerClient client, BitBuffer buffer, uint packetTimestamp) {
+				buffer.AdvanceReader(4);
+				Console.WriteLine("SRec UDP " + buffer.StartedBytesLeft + " " + packetTimestamp);
+				Server.SendUdp(client, buff => {
+					buff.AdvanceWriter(4);
+					buff.Write(buffer.Array, buffer.Offset, buffer.Size);
+				});
 			}
 
 			public void OnLostConnection(IDoubleServerClient client, DoubleServer.ClientState state) {
@@ -114,7 +118,7 @@ namespace DoubleSocket.Test {
 				PrintAndThrow("TCP authentication timeout: " + state);
 			}
 
-			public void OnFullAuthentication(ByteBuffer buffer) {
+			public void OnFullAuthentication(BitBuffer buffer) {
 				Assert.IsTrue(buffer.ReadInt() == FinalAuthenticationPacketPayload,
 					"Invalid extra information in final authentication packet.");
 				Console.WriteLine("Client got fully authenticated");
@@ -131,27 +135,34 @@ namespace DoubleSocket.Test {
 				Client.SendTcp(buff => buff.Write(_previousPayload));
 			}
 
-			public void OnTcpReceived(ByteBuffer buffer) {
-				Console.WriteLine("CRec TCP " + buffer.BytesLeft);
-				AssertFirstArrayContainsSecond(buffer.Array, buffer.ReadIndex, _previousPayload);
+			public void OnTcpReceived(BitBuffer buffer) {
+				Console.WriteLine("CRec TCP " + buffer.StartedBytesLeft);
+				AssertFirstArrayContainsSecond(buffer.Array, buffer.Offset, _previousPayload);
 				Random.NextBytes(_previousPayload);
 				if (++_payloadCounter == PayloadCount) {
 					_payloadCounter = 0;
 					Console.WriteLine("Client sending first UDP data");
-					Client.SendUdp(buff => buff.Write(_previousPayload));
+					Client.SendUdp(buff => {
+						buff.AdvanceWriter(4);
+						buff.Write(_previousPayload);
+					});
 				} else {
 					Client.SendTcp(buff => buff.Write(_previousPayload));
 				}
 			}
 
-			public void OnUdpReceived(ByteBuffer buffer, ushort packetTimestamp) {
-				Console.WriteLine("CRec UDP " + buffer.BytesLeft + " " + packetTimestamp);
-				AssertFirstArrayContainsSecond(buffer.Array, buffer.ReadIndex, _previousPayload);
+			public void OnUdpReceived(BitBuffer buffer, uint packetTimestamp) {
+				buffer.AdvanceReader(4);
+				Console.WriteLine("CRec UDP " + buffer.StartedBytesLeft + " " + packetTimestamp);
+				AssertFirstArrayContainsSecond(buffer.Array, buffer.Offset, _previousPayload);
 				if (++_payloadCounter == PayloadCount) {
 					Monitor.Pulse(Client);
 				} else {
 					Random.NextBytes(_previousPayload);
-					Client.SendUdp(buff => buff.Write(_previousPayload));
+					Client.SendUdp(buff => {
+						buff.AdvanceWriter(4);
+						buff.Write(_previousPayload);
+					});
 				}
 			}
 

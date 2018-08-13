@@ -1,5 +1,5 @@
 ﻿using System.Net.Sockets;
-using DoubleSocket.Utility.ByteBuffer;
+using DoubleSocket.Utility.BitBuffer;
 
 namespace DoubleSocket.Client {
 	/// <summary>
@@ -30,20 +30,20 @@ namespace DoubleSocket.Client {
 		/// </summary>
 		/// <param name="buffer">The buffer which holds the payload sent by the server in the final
 		/// authentication confirmation packet. The buffer may be empty.</param>
-		void OnFullAuthentication(ByteBuffer buffer);
+		void OnFullAuthentication(BitBuffer buffer);
 
 		/// <summary>
 		/// Called when the client received data over the TCP channel.
 		/// </summary>
 		/// <param name="buffer">The buffer which holds the decrypted received data.</param>
-		void OnTcpReceived(ByteBuffer buffer);
+		void OnTcpReceived(BitBuffer buffer);
 
 		/// <summary>
 		/// Called when the client received data over the UDP channel.
 		/// </summary>
 		/// <param name="buffer">The buffer which holds the decrypted received data.</param>
 		/// <param name="packetTimestamp">A timestamp which can be used in the DoubleProtocol utility class.</param>
-		void OnUdpReceived(ByteBuffer buffer, ushort packetTimestamp);
+		void OnUdpReceived(BitBuffer buffer, uint packetTimestamp);
 
 		/// <summary>
 		/// Called when the client loses connection to the server.

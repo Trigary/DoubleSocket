@@ -1,12 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Drawing;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading;
 using DoubleSocket.Protocol;
 using DoubleSocket.Server;
-using DoubleSocket.Utility.ByteBuffer;
+using DoubleSocket.Utility.BitBuffer;
 
 namespace DoubleSocket.Example.Server {
 	public class Program : IDoubleServerHandler {
@@ -28,20 +27,18 @@ namespace DoubleSocket.Example.Server {
 
 
 		public const int UpdateSendFrequency = 30;
-		public const int MaxPlayerCount = 3;
 		private readonly HashSet<Player> _players = new HashSet<Player>();
-		private readonly Queue<int> _colors = new Queue<int>();
-		private readonly ResettingByteBuffer _sendBuffer = new ResettingByteBuffer(MaxPlayerCount * 2);
+		private readonly Queue<byte> _colors = new Queue<byte>();
+		private readonly ResettingBitBuffer _sendBuffer = new ResettingBitBuffer(4);
 		private readonly DoubleServer _server;
 		private readonly Thread _senderThread;
-		private byte _idCounter;
 
 		public Program(int port) {
-			_colors.Enqueue(Color.Red.ToArgb());
-			_colors.Enqueue(Color.Green.ToArgb());
-			_colors.Enqueue(Color.Blue.ToArgb());
+			_colors.Enqueue(0);
+			_colors.Enqueue(1);
+			_colors.Enqueue(2);
 
-			_server = new DoubleServer(this, MaxPlayerCount, MaxPlayerCount, port);
+			_server = new DoubleServer(this, 3, 3, port);
 
 			_senderThread = new Thread(() => {
 				try {
@@ -49,11 +46,13 @@ namespace DoubleSocket.Example.Server {
 						lock (_server) {
 							byte[] data;
 							using (_sendBuffer) {
+								_sendBuffer.WriteBits((ulong)_players.Count, 2);
 								foreach (Player player in _players) {
-									_sendBuffer.Write(player.Id);
-									_sendBuffer.Write((byte)(player.X | (player.Y << 4)));
+									_sendBuffer.WriteBits(player.Id, 2);
+									_sendBuffer.WriteBits(player.X, 4);
+									_sendBuffer.WriteBits(player.Y, 4);
 								}
-								data = _sendBuffer.CloneArray();
+								data = _sendBuffer.ReadBytes(_sendBuffer.StartedBytesLeft);
 							}
 
 							foreach (Player player in _players) {
@@ -76,55 +75,51 @@ namespace DoubleSocket.Example.Server {
 
 
 
-		public bool TcpAuthenticateClient(IDoubleServerClient client, ByteBuffer buffer, out byte[] encryptionKey, out byte errorCode) {
-			encryptionKey = buffer.ReadBytes();
+		public bool TcpAuthenticateClient(IDoubleServerClient client, BitBuffer buffer, out byte[] encryptionKey, out byte errorCode) {
+			encryptionKey = buffer.ReadBytes(buffer.StartedBytesLeft);
 			errorCode = 0;
 			return true;
 		}
 
-		public Action<ByteBuffer> OnFullAuthentication(IDoubleServerClient client) {
-			byte newId;
-			do {
-				newId = _idCounter++;
-			} while (_players.Any(p => p.Id == newId));
+		public Action<BitBuffer> OnFullAuthentication(IDoubleServerClient client) {
+			byte newId = 0;
+			while (_players.Any(p => p.Id == newId)) {
+				newId++;
+			}
 
 			Player newPlayer = new Player(client, newId, _colors.Dequeue());
 			client.ExtraData = newPlayer;
 
 			foreach (Player player in _players) {
 				_server.SendTcp(player.ServerClient, buffer => {
-					buffer.Write((byte)1);
-					buffer.Write(newPlayer.Id);
-					buffer.Write(newPlayer.Color);
+					buffer.Write(true);
+					buffer.WriteBits(newPlayer.Id, 2);
+					buffer.WriteBits(newPlayer.Color, 2);
 				});
 			}
 
 			_players.Add(newPlayer);
-			_server.SendTcp(client, buffer => {
-				buffer.Write((byte)0);
+			return buffer => {
+				buffer.WriteBits((ulong)_players.Count, 2);
 				foreach (Player player in _players) {
-					buffer.Write(player.Id);
-					buffer.Write(player.Color);
+					buffer.WriteBits(player.Id, 2);
+					buffer.WriteBits(player.Color, 2);
 				}
-			});
-			return null;
+			};
 		}
 
 
 
-		public void OnTcpReceived(IDoubleServerClient client, ByteBuffer buffer) {
-			Console.WriteLine("Received " + buffer.BytesLeft + " bytes over TCP; this shouldn't happen.");
+		public void OnTcpReceived(IDoubleServerClient client, BitBuffer buffer) {
+			Console.WriteLine("Received " + buffer.StartedBytesLeft + " bytes over TCP; this shouldn't happen.");
 		}
 
-		public void OnUdpReceived(IDoubleServerClient client, ByteBuffer buffer, ushort packetTimestamp) {
+		public void OnUdpReceived(IDoubleServerClient client, BitBuffer buffer, uint packetTimestamp) {
 			Player player = (Player)client.ExtraData;
-			if (!DoubleProtocol.IsPacketNewest(ref player.NewestPacketTimestamp, packetTimestamp)) {
-				return;
+			if (DoubleProtocol.IsPacketNewest(ref player.NewestPacketTimestamp, packetTimestamp)) {
+				player.X = (byte)buffer.ReadBits(4);
+				player.Y = (byte)buffer.ReadBits(4);
 			}
-
-			byte value = buffer.ReadByte();
-			player.X = (byte)(value & 0b00001111);
-			player.Y = (byte)(value >> 4);
 		}
 
 
@@ -140,8 +135,8 @@ namespace DoubleSocket.Example.Server {
 
 			foreach (Player player in _players) {
 				_server.SendTcp(player.ServerClient, buffer => {
-					buffer.Write((byte)2);
-					buffer.Write(disconnectedPlayer.Id);
+					buffer.Write(false);
+					buffer.WriteBits(disconnectedPlayer.Id, 2);
 				});
 			}
 		}

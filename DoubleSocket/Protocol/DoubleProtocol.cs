@@ -41,6 +41,18 @@ namespace DoubleSocket.Protocol {
 
 
 		/// <summary>
+		/// The exclusive maximum value of the UDP packet timestamps.
+		/// </summary>
+		public const uint MaxPacketTimestampValue = 1 << 20;
+
+		/// <summary>
+		/// The bitmask which only lets through valid UDP packet timestamp values.
+		/// </summary>
+		public const uint PacketTimestampValueMask = 0b11111111111111111111;
+
+
+
+		/// <summary>
 		/// Determines whether the current CLR is Mono or not.
 		/// </summary>
 		public static bool IsMonoClr { get; } = Type.GetType("Mono.Runtime") != null;
@@ -57,26 +69,21 @@ namespace DoubleSocket.Protocol {
 		/// </summary>
 		/// <param name="connectionStartTimestamp">The timestamp of the connection's establishment.</param>
 		/// <returns></returns>
-		public static ushort PacketTimestamp(long connectionStartTimestamp) {
-			return (ushort)((TimeMillis - connectionStartTimestamp) / 10);
+		public static uint PacketTimestamp(long connectionStartTimestamp) {
+			return (uint)(TimeMillis - connectionStartTimestamp) & PacketTimestampValueMask;
 		}
 
 
 
 		/// <summary>
-		/// Calculates how much it took for the packet to arrive here. Since the "counter" overflows after 10.92 minutes,
+		/// Calculates how much it took for the packet to arrive here. Since the "counter" wraps around after ~17.5 minutes,
 		/// the value returned by this method may be completely off if the packet was received at least as much later.
 		/// </summary>
 		/// <param name="connectionStartTimestamp">The timestamp of the connection's establishment.</param>
 		/// <param name="packetTimestamp">The packet's timestamp, this is passed as a parameter to the UDP handler.</param>
 		/// <returns></returns>
-		public static long TripTime(long connectionStartTimestamp, ushort packetTimestamp) {
-			int currentPacketTimestamp = PacketTimestamp(connectionStartTimestamp);
-			int diff = currentPacketTimestamp - packetTimestamp;
-			if (diff < 0) {
-				diff += ushort.MaxValue;
-			}
-			return diff * 10;
+		public static long TripTime(long connectionStartTimestamp, uint packetTimestamp) {
+			return (PacketTimestamp(connectionStartTimestamp) - packetTimestamp) & PacketTimestampValueMask;
 		}
 
 
@@ -88,17 +95,17 @@ namespace DoubleSocket.Protocol {
 		/// <param name="previousNewestPacketTimestamp">The timestamp of the connection's establishment.</param>
 		/// <param name="packetTimestamp">The packet's timestamp, this is passed as a parameter to the UDP handler.</param>
 		/// <returns></returns>
-		public static bool IsPacketNewest(ref ushort previousNewestPacketTimestamp, ushort packetTimestamp) {
+		public static bool IsPacketNewest(ref uint previousNewestPacketTimestamp, uint packetTimestamp) {
 			if (IsPacketTimestampInThreshold(packetTimestamp, previousNewestPacketTimestamp)
-				|| IsPacketTimestampInThreshold(packetTimestamp + ushort.MaxValue, previousNewestPacketTimestamp)) {
+				|| IsPacketTimestampInThreshold((long)packetTimestamp + MaxPacketTimestampValue, previousNewestPacketTimestamp)) {
 				previousNewestPacketTimestamp = packetTimestamp;
 				return true;
 			}
 			return false;
 		}
 
-		private static bool IsPacketTimestampInThreshold(int newTimestamp, int previousTimestamp) {
-			return newTimestamp > previousTimestamp && newTimestamp - (ushort.MaxValue / 10) < previousTimestamp;
+		private static bool IsPacketTimestampInThreshold(long newTimestamp, long previousTimestamp) {
+			return newTimestamp > previousTimestamp && newTimestamp - (MaxPacketTimestampValue / 10) < previousTimestamp;
 		}
 	}
 }
