@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Net.Sockets;
 using DoubleSocket.Utility;
 using DoubleSocket.Utility.BitBuffer;
 
@@ -38,6 +39,25 @@ namespace DoubleSocket.Protocol {
 			}
 			packetTimestamp = (uint)buffer.ReadBits(20);
 			return true;
+		}
+
+		/// <summary>
+		/// Determines whether the error is harmful or not.
+		/// Throws an exception for errors which are not expected to happen.
+		/// </summary>
+		/// <param name="error">The error which should be checked.</param>
+		/// <returns>Whether the error is harmful.</returns>
+		public static bool IsHarmfulError(SocketError error) {
+			switch (error) {
+				case SocketError.Success:
+					return false;
+				case SocketError.OperationAborted:
+				case SocketError.Shutdown:
+				case SocketError.ConnectionReset:
+					return true;
+				default:
+					throw new SocketException((int)error);
+			}
 		}
 	}
 }

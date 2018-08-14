@@ -17,7 +17,7 @@ namespace DoubleSocket.Client {
 
 		private readonly ReceiveHandler _receiveHandler;
 		private readonly Socket _socket;
-		private volatile bool _disposed;
+		private bool _disposed;
 
 		/// <summary>
 		/// Creates a new instance with the specified options.
@@ -25,7 +25,6 @@ namespace DoubleSocket.Client {
 		/// <param name="receiveHandler">The handler of received data.</param>
 		public UdpClientSocket(ReceiveHandler receiveHandler) {
 			_receiveHandler = receiveHandler;
-
 			_socket = new Socket(SocketType.Dgram, ProtocolType.Udp) {
 				ReceiveBufferSize = DoubleProtocol.UdpSocketBufferSize,
 				SendBufferSize = DoubleProtocol.UdpSocketBufferSize,
@@ -56,11 +55,13 @@ namespace DoubleSocket.Client {
 		/// Closes the socket, therefore no more packets will be received and sending will be impossible.
 		/// </summary>
 		public void Close() {
-			_disposed = true;
-			if (_socket.Connected) {
-				_socket.Shutdown(SocketShutdown.Both);
+			lock (_socket) {
+				_disposed = true;
+				if (_socket.Connected) {
+					_socket.Shutdown(SocketShutdown.Both);
+				}
+				_socket.Close();
 			}
-			_socket.Close();
 		}
 
 
@@ -72,8 +73,10 @@ namespace DoubleSocket.Client {
 		/// <param name="offset">The offset of the data in the buffer.</param>
 		/// <param name="size">The size of the data.</param>
 		public void Send(byte[] data, int offset, int size) {
-			if (!_disposed) {
-				_socket.Send(data, offset, size, SocketFlags.None);
+			lock (_socket) {
+				if (!_disposed) {
+					_socket.Send(data, offset, size, SocketFlags.None);
+				}
 			}
 		}
 
@@ -81,17 +84,17 @@ namespace DoubleSocket.Client {
 
 		private void OnReceived(object sender, SocketAsyncEventArgs eventArgs) {
 			while (true) {
-				if (eventArgs.SocketError != SocketError.Success) {
-					if (eventArgs.SocketError == SocketError.OperationAborted
-						|| eventArgs.SocketError == SocketError.Shutdown) {
-						return;
-					}
-					throw new SocketException((int)eventArgs.SocketError);
+				if (UdpHelper.IsHarmfulError(eventArgs.SocketError)) {
+					return;
 				}
 
 				_receiveHandler(eventArgs.Buffer, eventArgs.BytesTransferred);
-				if (_socket.ReceiveAsync(eventArgs)) {
-					break;
+				lock (_socket) {
+					if (_disposed) {
+						return;
+					} else if (_socket.ReceiveAsync(eventArgs)) {
+						break;
+					}
 				}
 			}
 		}

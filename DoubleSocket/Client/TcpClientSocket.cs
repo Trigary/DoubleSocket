@@ -189,8 +189,12 @@ namespace DoubleSocket.Client {
 				}
 
 				_receiveHandler(eventArgs.Buffer, eventArgs.BytesTransferred);
-				if (_socket.ReceiveAsync(eventArgs)) {
-					break;
+				try {
+					if (_socket.ReceiveAsync(eventArgs)) {
+						break;
+					}
+				} catch (Exception e) when (e is ObjectDisposedException || e is InvalidOperationException) {
+					return;
 				}
 			}
 		}

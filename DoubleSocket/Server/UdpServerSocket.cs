@@ -19,7 +19,7 @@ namespace DoubleSocket.Server {
 		private readonly ReceiveHandler _receiveHandler;
 		private readonly int _port;
 		private readonly Socket _socket;
-		private volatile bool _disposed;
+		private bool _disposed;
 
 		/// <summary>
 		/// Creates a new instance with the specified options and instantly starts it.
@@ -53,9 +53,11 @@ namespace DoubleSocket.Server {
 		/// Closes the socket, therefore no more packets will be received and sending will be impossible.
 		/// </summary>
 		public void Close() {
-			_disposed = true;
-			_socket.Shutdown(SocketShutdown.Both);
-			_socket.Close();
+			lock (_socket) {
+				_disposed = true;
+				_socket.Shutdown(SocketShutdown.Both);
+				_socket.Close();
+			}
 		}
 
 
@@ -68,8 +70,10 @@ namespace DoubleSocket.Server {
 		/// <param name="offset">The offset of the data in the buffer.</param>
 		/// <param name="size">The size of the data.</param>
 		public void Send(EndPoint recipient, byte[] data, int offset, int size) {
-			if (!_disposed) {
-				_socket.SendTo(data, offset, size, SocketFlags.None, recipient);
+			lock (_socket) {
+				if (!_disposed) {
+					_socket.SendTo(data, offset, size, SocketFlags.None, recipient);
+				}
 			}
 		}
 
@@ -77,18 +81,19 @@ namespace DoubleSocket.Server {
 
 		private void OnReceived(object sender, SocketAsyncEventArgs eventArgs) {
 			while (true) {
-				if (eventArgs.SocketError != SocketError.Success) {
-					if (eventArgs.SocketError == SocketError.OperationAborted
-						|| eventArgs.SocketError == SocketError.Shutdown) {
-						return;
-					}
-					throw new SocketException((int)eventArgs.SocketError);
+				if (UdpHelper.IsHarmfulError(eventArgs.SocketError)) {
+					return;
 				}
 
 				_receiveHandler(eventArgs.RemoteEndPoint, eventArgs.Buffer, eventArgs.BytesTransferred);
-				eventArgs.RemoteEndPoint = new IPEndPoint(IPAddress.IPv6Any, _port);
-				if (_socket.ReceiveFromAsync(eventArgs)) {
-					break;
+				lock (_socket) {
+					if (_disposed) {
+						return;
+					}
+					eventArgs.RemoteEndPoint = new IPEndPoint(IPAddress.IPv6Any, _port);
+					if (_socket.ReceiveFromAsync(eventArgs)) {
+						break;
+					}
 				}
 			}
 		}
