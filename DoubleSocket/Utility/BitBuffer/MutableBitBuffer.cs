@@ -29,24 +29,43 @@
 
 		/// <summary>
 		/// Reinitializes the BitBuffer with the specified array as its underlying array.
-		/// Clears all state of the buffer.
+		/// Sets the write index to the array's length and clears all other state of the buffer.
 		/// </summary>
 		/// <param name="array">The new array to use.</param>
-		public void Reinitialize(byte[] array) {
+		public void SetContents(byte[] array) {
 			Array = array;
 			SetState(array.Length, 0);
 		}
 
 		/// <summary>
 		/// Reinitializes the BitBuffer with the specified array as its underlying array.
-		/// Overwrites all state with the specified parameters.
+		/// Sets the read and write indexes based on the specified parameters.
 		/// </summary>
 		/// <param name="array">The new array to use.</param>
 		/// <param name="offset">The offset of the contents in the array.</param>
 		/// <param name="size">The size of the contents in the array.</param>
-		public void Reinitialize(byte[] array, int offset, int size) {
+		public void SetContents(byte[] array, int offset, int size) {
 			Array = array;
 			SetState(offset + size, offset);
+		}
+
+
+
+		/// <summary>
+		/// Clears all state of the buffer, this including setting the write index to 0.
+		/// </summary>
+		public void ClearContents() {
+			SetState(0, 0);
+		}
+
+		/// <summary>
+		/// Clears all state of the buffer (also setting the write index to 0)
+		/// and sets a new array to use as the underlying array.
+		/// </summary>
+		/// <param name="array">The new array to use.</param>
+		public void ClearContents(byte[] array) {
+			Array = array;
+			SetState(0, 0);
 		}
 	}
 }

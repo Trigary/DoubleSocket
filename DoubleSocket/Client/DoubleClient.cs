@@ -195,7 +195,7 @@ namespace DoubleSocket.Client {
 					return;
 				}
 
-				_receiveBuffer.Reinitialize(_crypto.Decrypt(buffer, offset, size));
+				_receiveBuffer.SetContents(_crypto.Decrypt(buffer, offset, size));
 				if (CurrentState == State.TcpAuthenticating) {
 					if (_receiveBuffer.Array.Length == 1) {
 						Close();
@@ -259,7 +259,7 @@ namespace DoubleSocket.Client {
 					return;
 				}
 
-				_receiveBuffer.Reinitialize(_crypto.Decrypt(buffer, 0, size));
+				_receiveBuffer.SetContents(_crypto.Decrypt(buffer, 0, size));
 				if (UdpHelper.PrefixCheck(_receiveBuffer, out uint packetTimestamp)) {
 					_handler.OnUdpReceived(_receiveBuffer, packetTimestamp);
 				}

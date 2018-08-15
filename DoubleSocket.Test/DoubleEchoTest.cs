@@ -71,7 +71,7 @@ namespace DoubleSocket.Test {
 
 			public bool TcpAuthenticateClient(IDoubleServerClient client, BitBuffer buffer, out byte[] encryptionKey, out byte errorCode) {
 				Console.WriteLine("Server TCP authenticated client");
-				encryptionKey = buffer.ReadBytes(buffer.StartedBytesLeft);
+				encryptionKey = buffer.ReadBytes();
 				errorCode = 0;
 				return true;
 			}
@@ -82,13 +82,13 @@ namespace DoubleSocket.Test {
 			}
 
 			public void OnTcpReceived(IDoubleServerClient client, BitBuffer buffer) {
-				Console.WriteLine("SRec TCP " + buffer.StartedBytesLeft);
+				Console.WriteLine("SRec TCP " + buffer.TotalBitsLeft);
 				Server.SendTcp(client, buff => buff.Write(buffer.Array, buffer.Offset, buffer.Size));
 			}
 
 			public void OnUdpReceived(IDoubleServerClient client, BitBuffer buffer, uint packetTimestamp) {
 				buffer.AdvanceReader(4);
-				Console.WriteLine("SRec UDP " + buffer.StartedBytesLeft + " " + packetTimestamp);
+				Console.WriteLine("SRec UDP " + buffer.TotalBitsLeft + " " + packetTimestamp);
 				Server.SendUdp(client, buff => {
 					buff.AdvanceWriter(4);
 					buff.Write(buffer.Array, buffer.Offset, buffer.Size);
@@ -136,7 +136,7 @@ namespace DoubleSocket.Test {
 			}
 
 			public void OnTcpReceived(BitBuffer buffer) {
-				Console.WriteLine("CRec TCP " + buffer.StartedBytesLeft);
+				Console.WriteLine("CRec TCP " + buffer.TotalBitsLeft);
 				AssertFirstArrayContainsSecond(buffer.Array, buffer.Offset, _previousPayload);
 				Random.NextBytes(_previousPayload);
 				if (++_payloadCounter == PayloadCount) {
@@ -153,7 +153,7 @@ namespace DoubleSocket.Test {
 
 			public void OnUdpReceived(BitBuffer buffer, uint packetTimestamp) {
 				buffer.AdvanceReader(4);
-				Console.WriteLine("CRec UDP " + buffer.StartedBytesLeft + " " + packetTimestamp);
+				Console.WriteLine("CRec UDP " + buffer.TotalBitsLeft + " " + packetTimestamp);
 				AssertFirstArrayContainsSecond(buffer.Array, buffer.Offset, _previousPayload);
 				if (++_payloadCounter == PayloadCount) {
 					Monitor.Pulse(Client);

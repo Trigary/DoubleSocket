@@ -18,12 +18,6 @@ namespace DoubleSocket.Utility.BitBuffer {
 		public byte[] Array { get; protected set; }
 
 		/// <summary>
-		/// The count of remaining (fully or only partially written) bytes in the buffer.
-		/// Can be used in combination with ReadBytes to read all remaining bytes in the buffer.
-		/// </summary>
-		public int StartedBytesLeft => _writeIndex - _readIndex + ((_bitsLeftInReadByte - _bitsLeftInWriteByte + 7) / 8);
-
-		/// <summary>
 		/// The count of remaining written bits in the buffer.
 		/// </summary>
 		public int TotalBitsLeft => (_writeIndex - _readIndex) * 8 + _bitsLeftInReadByte - _bitsLeftInWriteByte;
@@ -279,6 +273,27 @@ namespace DoubleSocket.Utility.BitBuffer {
 				for (int i = 0; i < count; i++) {
 					bytes[i] = ReadByte();
 				}
+			}
+			return bytes;
+		}
+
+		/// <summary>
+		/// Reads all bytes which haven't been read yet into a new array.
+		/// All unwritten bits will be included at the end of the last byte.
+		/// </summary>
+		/// <returns>A new array containing all unread data.</returns>
+		public byte[] ReadBytes() {
+			int byteCount = TotalBitsLeft / 8;
+			int bitCount = TotalBitsLeft % 8;
+			byte[] bytes = new byte[byteCount + ((bitCount + 7) / 8)];
+			if (_bitsLeftInReadByte == 8) {
+				Buffer.BlockCopy(Array, _readIndex, bytes, 0, bytes.Length);
+				_readIndex += bytes.Length;
+			} else {
+				for (int i = 0; i < byteCount; i++) {
+					bytes[i] = ReadByte();
+				}
+				bytes[byteCount] = (byte)ReadBits(bitCount);
 			}
 			return bytes;
 		}

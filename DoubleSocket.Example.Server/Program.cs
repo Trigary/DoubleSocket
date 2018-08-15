@@ -52,7 +52,7 @@ namespace DoubleSocket.Example.Server {
 									_sendBuffer.WriteBits(player.X, 4);
 									_sendBuffer.WriteBits(player.Y, 4);
 								}
-								data = _sendBuffer.ReadBytes(_sendBuffer.StartedBytesLeft);
+								data = _sendBuffer.ReadBytes();
 							}
 
 							foreach (Player player in _players) {
@@ -76,7 +76,7 @@ namespace DoubleSocket.Example.Server {
 
 
 		public bool TcpAuthenticateClient(IDoubleServerClient client, BitBuffer buffer, out byte[] encryptionKey, out byte errorCode) {
-			encryptionKey = buffer.ReadBytes(buffer.StartedBytesLeft);
+			encryptionKey = buffer.ReadBytes();
 			errorCode = 0;
 			return true;
 		}
@@ -111,7 +111,7 @@ namespace DoubleSocket.Example.Server {
 
 
 		public void OnTcpReceived(IDoubleServerClient client, BitBuffer buffer) {
-			Console.WriteLine("Received " + buffer.StartedBytesLeft + " bytes over TCP; this shouldn't happen.");
+			Console.WriteLine("Received " + buffer.TotalBitsLeft + " bits over TCP; this shouldn't happen.");
 		}
 
 		public void OnUdpReceived(IDoubleServerClient client, BitBuffer buffer, uint packetTimestamp) {

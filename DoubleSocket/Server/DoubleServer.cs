@@ -182,7 +182,7 @@ namespace DoubleSocket.Server {
 				}
 
 				DoubleServerClient client = _tcpClients[sender];
-				_receiveBuffer.Reinitialize(buffer, offset, size);
+				_receiveBuffer.SetContents(buffer, offset, size);
 
 				if (client.State == ClientState.TcpAuthenticating) {
 					if (_handler.TcpAuthenticateClient(client, _receiveBuffer, out byte[] encryptionKey, out byte errorCode)) {
@@ -215,7 +215,7 @@ namespace DoubleSocket.Server {
 						Disconnect(client);
 					}
 				} else if (client.State == ClientState.Authenticated) {
-					_receiveBuffer.Reinitialize(_crypto.Decrypt(client.EncryptionKey, _receiveBuffer.Array,
+					_receiveBuffer.SetContents(_crypto.Decrypt(client.EncryptionKey, _receiveBuffer.Array,
 						_receiveBuffer.Offset, _receiveBuffer.Size));
 					if (client.CheckReceiveSequenceId(_receiveBuffer.ReadByte())) {
 						_handler.OnTcpReceived(client, _receiveBuffer);
@@ -246,7 +246,7 @@ namespace DoubleSocket.Server {
 
 				if (_udpClients.TryGetValue(sender, out DoubleServerClient client)) {
 					try {
-						_receiveBuffer.Reinitialize(_crypto.Decrypt(client.EncryptionKey, buffer, 0, size));
+						_receiveBuffer.SetContents(_crypto.Decrypt(client.EncryptionKey, buffer, 0, size));
 						if (UdpHelper.PrefixCheck(_receiveBuffer, out uint packetTimestamp)) {
 							_handler.OnUdpReceived(client, _receiveBuffer, packetTimestamp);
 						}
