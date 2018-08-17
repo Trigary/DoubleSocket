@@ -82,7 +82,7 @@ namespace DoubleSocket.Protocol {
 		/// <param name="connectionStartTimestamp">The timestamp of the connection's establishment.</param>
 		/// <param name="packetTimestamp">The packet's timestamp, this is passed as a parameter to the UDP handler.</param>
 		/// <returns></returns>
-		public static long TripTime(long connectionStartTimestamp, uint packetTimestamp) {
+		public static uint TripTime(long connectionStartTimestamp, uint packetTimestamp) {
 			return (PacketTimestamp(connectionStartTimestamp) - packetTimestamp) & PacketTimestampValueMask;
 		}
 
