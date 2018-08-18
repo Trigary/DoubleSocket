@@ -247,7 +247,7 @@ namespace DoubleSocket.Server {
 				if (_udpClients.TryGetValue(sender, out DoubleServerClient client)) {
 					try {
 						_receiveBuffer.SetContents(_crypto.Decrypt(client.EncryptionKey, buffer, 0, size));
-						if (UdpHelper.PrefixCheck(_receiveBuffer, out uint packetTimestamp)) {
+						if (UdpHelper.PrefixCheck(_receiveBuffer, out ushort packetTimestamp)) {
 							_handler.OnUdpReceived(client, _receiveBuffer, packetTimestamp);
 						}
 					} catch (CryptographicException) {

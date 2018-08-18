@@ -54,10 +54,10 @@ If the new sequence id's value would be equal to the sequence id value bound (sp
 
 All UDP packets are fully encrypted: they contain no unencrypted bits.
 The first 32 bits are the CRC-32 calculated from the rest of the packet.
-The next 20 bits are the milliseconds which passed since the timestamp specified by the server in the TCP authentication step.
-This means that these 20 bits specify when the packet was sent (with a 1ms precision), allowing the ordering of packets, the dropping out-of-order ones, latency measurement and even protection against replay attacks.
+The next 16 bits are the milliseconds which passed since the timestamp specified by the server in the TCP authentication step divided by 10.
+This means that these 16 bits specify when the packet was sent (with a 10ms precision), allowing the ordering of packets, the dropping out-of-order ones, latency measurement and even protection against replay attacks.
 This data is not used by this library, it is up to the user to use it or ignore it (and just keep its replay attack protection property).
-This elapsed time counter wraps around after ~17.5 minutes, this has to be handled.
+This elapsed time counter wraps around after ~10.92 minutes, this has to be handled.
 
 ### Disconnects
 

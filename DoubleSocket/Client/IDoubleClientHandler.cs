@@ -43,7 +43,7 @@ namespace DoubleSocket.Client {
 		/// </summary>
 		/// <param name="buffer">The buffer which holds the decrypted received data.</param>
 		/// <param name="packetTimestamp">A timestamp which can be used in the DoubleProtocol utility class.</param>
-		void OnUdpReceived(BitBuffer buffer, uint packetTimestamp);
+		void OnUdpReceived(BitBuffer buffer, ushort packetTimestamp);
 
 		/// <summary>
 		/// Called when the client loses connection to the server.

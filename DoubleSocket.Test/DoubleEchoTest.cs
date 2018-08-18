@@ -86,13 +86,9 @@ namespace DoubleSocket.Test {
 				Server.SendTcp(client, buff => buff.Write(buffer.Array, buffer.Offset, buffer.Size));
 			}
 
-			public void OnUdpReceived(IDoubleServerClient client, BitBuffer buffer, uint packetTimestamp) {
-				buffer.AdvanceReader(4);
+			public void OnUdpReceived(IDoubleServerClient client, BitBuffer buffer, ushort packetTimestamp) {
 				Console.WriteLine("SRec UDP " + buffer.TotalBitsLeft + " " + packetTimestamp);
-				Server.SendUdp(client, buff => {
-					buff.AdvanceWriter(4);
-					buff.Write(buffer.Array, buffer.Offset, buffer.Size);
-				});
+				Server.SendUdp(client, buff => buff.Write(buffer.Array, buffer.Offset, buffer.Size));
 			}
 
 			public void OnLostConnection(IDoubleServerClient client, DoubleServer.ClientState state) {
@@ -142,27 +138,20 @@ namespace DoubleSocket.Test {
 				if (++_payloadCounter == PayloadCount) {
 					_payloadCounter = 0;
 					Console.WriteLine("Client sending first UDP data");
-					Client.SendUdp(buff => {
-						buff.AdvanceWriter(4);
-						buff.Write(_previousPayload);
-					});
+					Client.SendUdp(buff => buff.Write(_previousPayload));
 				} else {
 					Client.SendTcp(buff => buff.Write(_previousPayload));
 				}
 			}
 
-			public void OnUdpReceived(BitBuffer buffer, uint packetTimestamp) {
-				buffer.AdvanceReader(4);
+			public void OnUdpReceived(BitBuffer buffer, ushort packetTimestamp) {
 				Console.WriteLine("CRec UDP " + buffer.TotalBitsLeft + " " + packetTimestamp);
 				AssertFirstArrayContainsSecond(buffer.Array, buffer.Offset, _previousPayload);
 				if (++_payloadCounter == PayloadCount) {
 					Monitor.Pulse(Client);
 				} else {
 					Random.NextBytes(_previousPayload);
-					Client.SendUdp(buff => {
-						buff.AdvanceWriter(4);
-						buff.Write(_previousPayload);
-					});
+					Client.SendUdp(buff => buff.Write(_previousPayload));
 				}
 			}
 

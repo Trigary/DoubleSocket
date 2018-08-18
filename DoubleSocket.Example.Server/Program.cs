@@ -114,7 +114,7 @@ namespace DoubleSocket.Example.Server {
 			Console.WriteLine("Received " + buffer.TotalBitsLeft + " bits over TCP; this shouldn't happen.");
 		}
 
-		public void OnUdpReceived(IDoubleServerClient client, BitBuffer buffer, uint packetTimestamp) {
+		public void OnUdpReceived(IDoubleServerClient client, BitBuffer buffer, ushort packetTimestamp) {
 			Player player = (Player)client.ExtraData;
 			if (DoubleProtocol.IsPacketNewest(ref player.NewestPacketTimestamp, packetTimestamp)) {
 				player.X = (byte)buffer.ReadBits(4);

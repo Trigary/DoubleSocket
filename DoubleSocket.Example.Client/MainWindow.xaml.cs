@@ -18,7 +18,7 @@ namespace DoubleSocket.Example.Client {
 		private readonly IDictionary<byte, Player> _players = new Dictionary<byte, Player>();
 		private readonly DispatcherTimer _timer = new DispatcherTimer();
 		private DoubleClient _client;
-		private uint _newestPacketTimestamp;
+		private ushort _newestPacketTimestamp;
 
 		public MainWindow() {
 			InitializeComponent();
@@ -81,7 +81,7 @@ namespace DoubleSocket.Example.Client {
 
 
 
-		public void OnUdpReceived(BitBuffer buffer, uint packetTimestamp) {
+		public void OnUdpReceived(BitBuffer buffer, ushort packetTimestamp) {
 			if (!DoubleProtocol.IsPacketNewest(ref _newestPacketTimestamp, packetTimestamp)) {
 				return;
 			}

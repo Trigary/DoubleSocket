@@ -16,7 +16,7 @@ namespace DoubleSocket.Protocol {
 		/// <param name="payloadwriter">The action which writes the payload to a buffer.</param>
 		public static void WritePrefix(BitBuffer buffer, long connectionStartTimestamp, Action<BitBuffer> payloadwriter) {
 			buffer.AdvanceWriter(32);
-			buffer.WriteBits(DoubleProtocol.PacketTimestamp(connectionStartTimestamp), 20);
+			buffer.Write(DoubleProtocol.PacketTimestamp(connectionStartTimestamp));
 			payloadwriter(buffer);
 			uint crc = Crc32.Get(buffer.Array, 4, buffer.Size - 4);
 			byte[] array = buffer.Array;
@@ -32,12 +32,12 @@ namespace DoubleSocket.Protocol {
 		/// <param name="buffer">The buffer in which the packet is stored.</param>
 		/// <param name="packetTimestamp">The packet's timestamp.</param>
 		/// <returns>Whether the packet is valid.</returns>
-		public static bool PrefixCheck(BitBuffer buffer, out uint packetTimestamp) {
-			if (buffer.Size <= 7 || buffer.ReadUInt() != Crc32.Get(buffer.Array, buffer.Offset, buffer.Size)) {
+		public static bool PrefixCheck(BitBuffer buffer, out ushort packetTimestamp) {
+			if (buffer.Size <= 6 || buffer.ReadUInt() != Crc32.Get(buffer.Array, buffer.Offset, buffer.Size)) {
 				packetTimestamp = 0;
 				return false;
 			}
-			packetTimestamp = (uint)buffer.ReadBits(20);
+			packetTimestamp = buffer.ReadUShort();
 			return true;
 		}
 

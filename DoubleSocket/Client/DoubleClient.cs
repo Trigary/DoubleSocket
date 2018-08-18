@@ -260,7 +260,7 @@ namespace DoubleSocket.Client {
 				}
 
 				_receiveBuffer.SetContents(_crypto.Decrypt(buffer, 0, size));
-				if (UdpHelper.PrefixCheck(_receiveBuffer, out uint packetTimestamp)) {
+				if (UdpHelper.PrefixCheck(_receiveBuffer, out ushort packetTimestamp)) {
 					_handler.OnUdpReceived(_receiveBuffer, packetTimestamp);
 				}
 			}

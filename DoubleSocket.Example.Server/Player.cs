@@ -7,7 +7,7 @@ namespace DoubleSocket.Example.Server {
 		public byte Color { get; }
 		public byte X { get; set; } = byte.MaxValue;
 		public byte Y { get; set; } = byte.MaxValue;
-		public uint NewestPacketTimestamp;
+		public ushort NewestPacketTimestamp;
 
 		public Player(IDoubleServerClient serverClient, byte id, byte color) {
 			ServerClient = serverClient;
